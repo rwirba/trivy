@@ -1,5 +1,5 @@
 ---
-# Validate inputs on control node before touching targets
+# ---------- Validate inputs on control node ----------
 - name: Ensure local tarball exists (control node)
   delegate_to: localhost
   run_once: true
@@ -26,9 +26,8 @@
       DB: {{ trivy_db_tar_local }} exists={{ _db_local.stat.exists }},
       Script: {{ scan_script_local }} exists={{ _script_local.stat.exists }}
 
-# Work on target
+# ---------- Prepare target paths ----------
 - name: Ensure staging/cache/report directories on target
-  become: true
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
@@ -47,7 +46,7 @@
     dest: "{{ trivy_db_tar_remote }}"
     mode: "0644"
 
-- name: Extract DB into Trivy cache (~/.cache/trivy)
+- name: Extract DB into Trivy cache (~/.cache/trivy/db)
   ansible.builtin.unarchive:
     src: "{{ trivy_db_tar_remote }}"
     dest: "{{ trivy_cache_dir }}"
@@ -71,15 +70,14 @@
     msg: "Offline DB incomplete under {{ trivy_db_dir }} (need trivy.db and metadata.json)."
   when: not _db_ok.stat.exists or not _meta_ok.stat.exists
 
+# ---------- Install scan script ----------
 - name: Ensure /usr/local/bin exists
-  become: true
   ansible.builtin.file:
     path: /usr/local/bin
     state: directory
     mode: "0755"
 
 - name: Install scan script on target
-  become: true
   ansible.builtin.copy:
     src: "{{ scan_script_local }}"
     dest: "{{ scan_script_remote }}"
@@ -87,20 +85,18 @@
     group: root
     mode: "0755"
 
-# NEW — make rootless Podman visible to Trivy
+# ---------- Make rootless Podman visible to Trivy ----------
 - name: Get UID of scan user
-  become: true
   ansible.builtin.command: id -u {{ trivy_target_user }}
   register: _uid
   changed_when: false
 
 - name: Allow user services to run (linger)
-  become: true
   ansible.builtin.command: loginctl enable-linger {{ trivy_target_user }}
   changed_when: false
+  failed_when: false
 
 - name: Enable and start Podman user socket
-  become: true
   become_user: "{{ trivy_target_user }}"
   environment:
     XDG_RUNTIME_DIR: "/run/user/{{ _uid.stdout }}"
@@ -109,8 +105,8 @@
   failed_when: false
   changed_when: false
 
+# ---------- Run your existing script (OS-only offline scan) ----------
 - name: Run offline scan (generates timestamped report dir)
-  become: true
   become_user: "{{ trivy_target_user }}"
   environment:
     SEVERITY: "{{ severity }}"
@@ -118,8 +114,8 @@
     TRIVY_IMAGE_SRC: "podman"
     TRIVY_SKIP_DB_UPDATE: "true"
     TRIVY_OFFLINE_SCAN: "true"
-    TRIVY_VULN_TYPE: "os"        # <— scan OS packages only, no Java DB
-    TRIVY_SCANNERS: "vuln"       # <— disable secret/config scanners (optional)
+    TRIVY_PKG_TYPES: "os"   # replaces deprecated TRIVY_VULN_TYPE
+    TRIVY_SCANNERS: "vuln"  # optional: skip secret/config scanners offline
     XDG_RUNTIME_DIR: "/run/user/{{ _uid.stdout }}"
   ansible.builtin.shell: "{{ scan_script_remote }}"
   args:
@@ -127,64 +123,12 @@
   register: _scan
   failed_when: false
 
-
 - name: Show scan script output (for quick visibility)
   ansible.builtin.debug:
     var: _scan.stdout_lines
 
-- name: Parse reports dir from stdout (robust)
-  ansible.builtin.set_fact:
-    reports_dir: >-
-      {{ (
-           _scan.stdout_lines
-           | select('search', 'Reports saved to:')
-           | list
-           | last
-           | default('')
-           | regex_replace('^.*Reports saved to:\\s*', '')
-         ) }}
-
-- name: Fallback to newest reports dir if not parsed
-  when: reports_dir | length == 0
-  ansible.builtin.shell: |
-    ls -1dt {{ trivy_reports_root }}/trivy-reports-* 2>/dev/null | head -n1
-  args: { executable: /bin/bash }
-  register: _latest_dir
-  changed_when: false
-
-- name: Use newest reports dir (fallback)
-  when: reports_dir | length == 0
-  ansible.builtin.set_fact:
-    reports_dir: "{{ _latest_dir.stdout | default('', true) }}"
-
-- name: Verify reports dir exists on remote
-  ansible.builtin.stat:
-    path: "{{ reports_dir }}"
-  register: _repdir
-
-- name: Fail if no report directory was produced
-  ansible.builtin.fail:
-    msg: "No report directory found under {{ trivy_reports_root }}."
-  when: reports_dir | length == 0 or not _repdir.stat.exists
-
-- name: List JSON reports on remote
-  ansible.builtin.find:
-    paths: "{{ reports_dir }}"
-    patterns: "*.json"
-    file_type: file
-  register: _report_files
-
-- name: Fetch reports back to control node
-  when: _report_files.files | length > 0
-  ansible.builtin.fetch:
-    src: "{{ item.path }}"
-    dest: "reports/{{ inventory_hostname }}/"
-    flat: true
-  loop: "{{ _report_files.files }}"
-
-
-# --- Fetch reports from remote properly (robust) ---
-- name: Parse reports dir from stdout (robust)
+# ---------- Fetch reports from remote (robust) ----------
+- name: Parse reports dir line from stdout
   ansible.builtin.set_fact:
     _reports_dir_line: >-
       {{
@@ -196,44 +140,7 @@
           | default('')
         )
       }}
-- name: Extract only the path from the line
+
+- name: Extract path from the line
   ansible.builtin.set_fact:
-    _reports_dir: "{{ _reports_dir_line | regex_replace('^.*Reports saved to:\\s*', '') }}"
-
-- name: Fallback to newest reports dir if not parsed or invalid
-  when: _reports_dir | length == 0
-  ansible.builtin.shell: |
-    ls -1dt {{ trivy_reports_root }}/trivy-reports-* 2>/dev/null | head -n1
-  args: { executable: /bin/bash }
-  register: _latest_dir
-  changed_when: false
-
-- name: Use newest reports dir (fallback)
-  when: _reports_dir | length == 0
-  ansible.builtin.set_fact:
-    _reports_dir: "{{ _latest_dir.stdout | default('', true) }}"
-
-- name: Verify reports dir exists on remote
-  ansible.builtin.stat:
-    path: "{{ _reports_dir }}"
-  register: _repdir
-
-- name: Fail if no report directory was produced
-  ansible.builtin.fail:
-    msg: "No report directory found under {{ trivy_reports_root }}."
-  when: _reports_dir | length == 0 or not _repdir.stat.exists
-
-- name: List JSON reports on remote
-  ansible.builtin.find:
-    paths: "{{ _reports_dir }}"
-    patterns: "*.json"
-    file_type: file
-  register: _report_files
-
-- name: Fetch reports back to control node
-  when: _report_files.files | length > 0
-  ansible.builtin.fetch:
-    src: "{{ item.path }}"
-    dest: "reports/{{ inventory_hostname }}/"
-    flat: true
-  loop: "{{ _report_files.files }}"
+    reports_dir: "{{ _report
