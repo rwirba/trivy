@@ -1,6 +1,5 @@
 # Base directory to create image folders (defaults to playbook directory)
-base_dir: "{{ playbook_dir }}"
-
+base_dir: "/opt/podman-builds"
 # Tag to use for all images built via podman
 image_tag: "v1"
 
