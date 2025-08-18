@@ -43,7 +43,8 @@ build_images_list:
     dockerfile: |
       FROM registry.access.redhat.com/ubi8/ubi
       LABEL maintainer="security@test.local"
-      RUN dnf install -y --enablerepo=ansible-automation-platform-for-rhel-8-x86_64-rpms ansible-core && \
+      RUN dnf install -y python3-pip && \
+          pip3 install ansible-core && \
           dnf clean all
       CMD [ "ansible", "--version" ]
 
