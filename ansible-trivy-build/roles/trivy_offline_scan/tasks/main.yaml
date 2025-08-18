@@ -28,11 +28,11 @@
 
 # Work on target
 - name: Ensure staging/cache/report directories on target
-  become: true                      # create under /opt with root
+  become: true
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
-    owner: "{{ trivy_target_user }}"  # but hand ownership to the scan user
+    owner: "{{ trivy_target_user }}"
     group: "{{ trivy_target_user }}"
     mode: "0755"
   loop:
@@ -61,18 +61,25 @@
     path: "{{ trivy_db_dir }}/trivy.db"
   register: _db_ok
 
-- name: Fail if trivy.db missing
+- name: Verify metadata.json exists after extraction
+  ansible.builtin.stat:
+    path: "{{ trivy_db_dir }}/metadata.json"
+  register: _meta_ok
+
+- name: Fail if offline DB files missing
   ansible.builtin.fail:
-    msg: "trivy.db not found under {{ trivy_db_dir }} after extraction."
-  when: not _db_ok.stat.exists
+    msg: "Offline DB incomplete under {{ trivy_db_dir }} (need trivy.db and metadata.json)."
+  when: not _db_ok.stat.exists or not _meta_ok.stat.exists
 
 - name: Ensure /usr/local/bin exists
+  become: true
   ansible.builtin.file:
     path: /usr/local/bin
     state: directory
     mode: "0755"
 
 - name: Install scan script on target
+  become: true
   ansible.builtin.copy:
     src: "{{ scan_script_local }}"
     dest: "{{ scan_script_remote }}"
@@ -81,7 +88,7 @@
     mode: "0755"
 
 - name: Run offline scan (generates timestamped report dir)
-  become: true  
+  become: true
   become_user: "{{ trivy_target_user }}"
   environment:
     SEVERITY: "{{ severity }}"
@@ -96,23 +103,34 @@
   ansible.builtin.debug:
     var: _scan.stdout_lines
 
-- name: Find newest report directory on target
-  ansible.builtin.shell: |
-    ls -1dt {{ trivy_reports_root }}/trivy-reports-* 2>/dev/null | head -n1
-  args:
-    executable: /bin/bash
-  register: _latest_dir
-  changed_when: false
+# --- Fetch reports from remote properly ---
+- name: Derive reports directory from output (fallback to newest)
+  ansible.builtin.set_fact:
+    _reports_dir: >-
+      {{ (_scan.stdout | regex_search('Reports saved to:\\s*(\\S+)', '\\1')) |
+         default(lookup('pipe', 'ls -1dt ' ~ trivy_reports_root ~ '/trivy-reports-* 2>/dev/null | head -n1'), true) }}
+
+- name: Verify reports dir exists on remote
+  ansible.builtin.stat:
+    path: "{{ _reports_dir }}"
+  register: _repdir
 
 - name: Fail if no report directory was produced
   ansible.builtin.fail:
     msg: "No report directory found under {{ trivy_reports_root }}."
-  when: _latest_dir.stdout | length == 0
+  when: _reports_dir | length == 0 or not _repdir.stat.exists
+
+- name: List JSON reports on remote
+  ansible.builtin.find:
+    paths: "{{ _reports_dir }}"
+    patterns: "*.json"
+    file_type: file
+  register: _report_files
 
 - name: Fetch reports back to control node
+  when: _report_files.files | length > 0
   ansible.builtin.fetch:
-    src: "{{ item }}"
+    src: "{{ item.path }}"
     dest: "reports/{{ inventory_hostname }}/"
-    flat: yes
-  with_fileglob:
-    - "{{ _latest_dir.stdout }}/*.json"
+    flat: true
+  loop: "{{ _report_files.files }}"
