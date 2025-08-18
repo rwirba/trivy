@@ -44,6 +44,7 @@ build_images_list:
       FROM registry.access.redhat.com/ubi8/ubi
       LABEL maintainer="security@test.local"
       RUN dnf install -y python3-pip && \
+          pip3 install setuptools_rust && \
           pip3 install ansible-core && \
           dnf clean all
       CMD [ "ansible", "--version" ]
