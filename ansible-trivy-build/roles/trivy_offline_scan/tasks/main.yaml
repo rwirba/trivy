@@ -97,6 +97,7 @@
   failed_when: false
 
 - name: Enable and start Podman user socket
+  become: true
   become_user: "{{ trivy_target_user }}"
   environment:
     XDG_RUNTIME_DIR: "/run/user/{{ _uid.stdout }}"
@@ -107,6 +108,7 @@
 
 # ---------- Run your existing script (OS-only offline scan) ----------
 - name: Run offline scan (generates timestamped report dir)
+  become: true
   become_user: "{{ trivy_target_user }}"
   environment:
     SEVERITY: "{{ severity }}"
@@ -127,50 +129,22 @@
   ansible.builtin.debug:
     var: _scan.stdout_lines
 
-# ---------- Fetch reports from remote (robust) ----------
-- name: Parse reports dir line from stdout
-  ansible.builtin.set_fact:
-    _reports_dir_line: >-
-      {{
-        (
-          _scan.stdout_lines
-          | select('search', 'Reports saved to:')
-          | list
-          | last
-          | default('')
-        )
-      }}
-
-- name: Extract path from the line
-  ansible.builtin.set_fact:
-    reports_dir: "{{ _reports_dir_line | regex_search('Reports saved to:\\s*(\\S.*)$', '\\1') | trim }}"
-
-- name: Fallback to newest reports dir if not parsed or invalid
-  when: reports_dir | length == 0
+# ---------- Get newest reports dir from REMOTE and fetch JSONs ----------
+- name: Find newest reports directory on remote
   ansible.builtin.shell: |
     ls -1dt {{ trivy_reports_root }}/trivy-reports-* 2>/dev/null | head -n1
   args: { executable: /bin/bash }
   register: _latest_dir
   changed_when: false
 
-- name: Use newest reports dir (fallback)
-  when: reports_dir | length == 0
-  ansible.builtin.set_fact:
-    reports_dir: "{{ _latest_dir.stdout | default('', true) }}"
-
-- name: Verify reports dir exists on remote
-  ansible.builtin.stat:
-    path: "{{ reports_dir }}"
-  register: _repdir
-
 - name: Fail if no report directory was produced
   ansible.builtin.fail:
     msg: "No report directory found under {{ trivy_reports_root }}."
-  when: reports_dir | length == 0 or not _repdir.stat.exists
+  when: _latest_dir.stdout | trim | length == 0
 
 - name: List JSON reports on remote
   ansible.builtin.find:
-    paths: "{{ reports_dir }}"
+    paths: "{{ _latest_dir.stdout | trim }}"
     patterns: "*.json"
     file_type: file
   register: _report_files
