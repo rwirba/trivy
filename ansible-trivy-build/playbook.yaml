@@ -12,7 +12,7 @@
   hosts: all
   gather_facts: yes
   become: true
+  tags: [trivy_offline_scan]
   roles:
     - role: trivy_offline_scan
-      apply:
-        tags: ['trivy_offline_scan'] 
+
