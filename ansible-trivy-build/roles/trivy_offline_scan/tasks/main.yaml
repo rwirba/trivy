@@ -28,10 +28,11 @@
 
 # Work on target
 - name: Ensure staging/cache/report directories on target
+  become: true                      # create under /opt with root
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
-    owner: "{{ trivy_target_user }}"
+    owner: "{{ trivy_target_user }}"  # but hand ownership to the scan user
     group: "{{ trivy_target_user }}"
     mode: "0755"
   loop:
@@ -71,18 +72,6 @@
     state: directory
     mode: "0755"
 
-# - name: Verify trivy is present on target
-#   ansible.builtin.command: bash -lc "command -v trivy"
-#   register: _trivy_bin
-#   changed_when: false
-#   failed_when: _trivy_bin.rc != 0
-
-# - name: Verify podman is present on target
-#   ansible.builtin.command: bash -lc "command -v podman"
-#   register: _podman_bin
-#   changed_when: false
-#   failed_when: _podman_bin.rc != 0
-
 - name: Install scan script on target
   ansible.builtin.copy:
     src: "{{ scan_script_local }}"
@@ -92,6 +81,7 @@
     mode: "0755"
 
 - name: Run offline scan (generates timestamped report dir)
+  become: true  
   become_user: "{{ trivy_target_user }}"
   environment:
     SEVERITY: "{{ severity }}"
