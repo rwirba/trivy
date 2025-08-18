@@ -5,7 +5,7 @@
   gather_facts: false
   become: true
   roles:
-    - role: build_images
+    - { role: build_images, tags: ['build_images'] }
 
 # Play 2: Push Trivy offline DB, run offline scans, collect reports
 - name: Push Trivy offline DB, run offline scans with Podman, collect reports
@@ -13,4 +13,4 @@
   gather_facts: yes
   become: true
   roles:
-    - role: trivy_offline_scan
+    - { role: trivy_offline_scan, tags: ['trivy_offline_scan'] }
