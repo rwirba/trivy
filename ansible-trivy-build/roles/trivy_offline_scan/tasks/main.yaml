@@ -71,17 +71,17 @@
     state: directory
     mode: "0755"
 
-- name: Verify trivy is present on target
-  ansible.builtin.command: bash -lc "command -v trivy"
-  register: _trivy_bin
-  changed_when: false
-  failed_when: _trivy_bin.rc != 0
+# - name: Verify trivy is present on target
+#   ansible.builtin.command: bash -lc "command -v trivy"
+#   register: _trivy_bin
+#   changed_when: false
+#   failed_when: _trivy_bin.rc != 0
 
-- name: Verify podman is present on target
-  ansible.builtin.command: bash -lc "command -v podman"
-  register: _podman_bin
-  changed_when: false
-  failed_when: _podman_bin.rc != 0
+# - name: Verify podman is present on target
+#   ansible.builtin.command: bash -lc "command -v podman"
+#   register: _podman_bin
+#   changed_when: false
+#   failed_when: _podman_bin.rc != 0
 
 - name: Install scan script on target
   ansible.builtin.copy:
