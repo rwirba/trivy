@@ -1,0 +1,19 @@
+# Paths on the CONTROL NODE (where you run ansible-playbook)
+trivy_db_tar_local: "/home/ubuntu/_trivy-db-build/trivy-offline.db.tgz"
+scan_script_local:  "/home/ubuntu/offline-trivy-scan.sh"
+
+# Target user (on offline_scanners) that owns cache and runs scans
+trivy_target_user: "{{ ansible_user | default('ec2-user') }}"
+
+# Where to stage files/cache/reports on TARGET hosts
+trivy_stage_dir:     "/opt/trivy-cache"
+trivy_reports_root:  "/opt/trivy-reports"
+trivy_cache_dir:     "/home/{{ trivy_target_user }}/.cache/trivy"
+trivy_db_dir:        "{{ trivy_cache_dir }}/db"
+
+# Remote paths on TARGET
+trivy_db_tar_remote: "{{ trivy_stage_dir }}/trivy-offline.db.tgz"
+scan_script_remote:  "/usr/local/bin/offline-trivy-scan.sh"
+
+# Scan behavior
+severity: "HIGH,CRITICAL"

@@ -1,0 +1,128 @@
+---
+# Validate inputs on control node before touching targets
+- name: Ensure local tarball exists (control node)
+  delegate_to: localhost
+  run_once: true
+  ansible.builtin.stat:
+    path: "{{ trivy_db_tar_local }}"
+  register: _db_local
+
+- name: Ensure local scan script exists (control node)
+  delegate_to: localhost
+  run_once: true
+  ansible.builtin.stat:
+    path: "{{ scan_script_local }}"
+  register: _script_local
+
+- name: Abort if inputs missing
+  delegate_to: localhost
+  run_once: true
+  ansible.builtin.assert:
+    that:
+      - _db_local.stat.exists
+      - _script_local.stat.exists
+    fail_msg: >-
+      One or more inputs missing on control node.
+      DB: {{ trivy_db_tar_local }} exists={{ _db_local.stat.exists }},
+      Script: {{ scan_script_local }} exists={{ _script_local.stat.exists }}
+
+# Work on target
+- name: Ensure staging/cache/report directories on target
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ trivy_target_user }}"
+    group: "{{ trivy_target_user }}"
+    mode: "0755"
+  loop:
+    - "{{ trivy_stage_dir }}"
+    - "{{ trivy_cache_dir }}"
+    - "{{ trivy_db_dir }}"
+    - "{{ trivy_reports_root }}"
+
+- name: Copy offline DB tarball to target
+  ansible.builtin.copy:
+    src: "{{ trivy_db_tar_local }}"
+    dest: "{{ trivy_db_tar_remote }}"
+    mode: "0644"
+
+- name: Extract DB into Trivy cache (~/.cache/trivy)
+  ansible.builtin.unarchive:
+    src: "{{ trivy_db_tar_remote }}"
+    dest: "{{ trivy_cache_dir }}"
+    remote_src: true
+    owner: "{{ trivy_target_user }}"
+    group: "{{ trivy_target_user }}"
+    creates: "{{ trivy_db_dir }}/trivy.db"
+
+- name: Verify trivy.db exists after extraction
+  ansible.builtin.stat:
+    path: "{{ trivy_db_dir }}/trivy.db"
+  register: _db_ok
+
+- name: Fail if trivy.db missing
+  ansible.builtin.fail:
+    msg: "trivy.db not found under {{ trivy_db_dir }} after extraction."
+  when: not _db_ok.stat.exists
+
+- name: Ensure /usr/local/bin exists
+  ansible.builtin.file:
+    path: /usr/local/bin
+    state: directory
+    mode: "0755"
+
+- name: Verify trivy is present on target
+  ansible.builtin.command: bash -lc "command -v trivy"
+  register: _trivy_bin
+  changed_when: false
+  failed_when: _trivy_bin.rc != 0
+
+- name: Verify podman is present on target
+  ansible.builtin.command: bash -lc "command -v podman"
+  register: _podman_bin
+  changed_when: false
+  failed_when: _podman_bin.rc != 0
+
+- name: Install scan script on target
+  ansible.builtin.copy:
+    src: "{{ scan_script_local }}"
+    dest: "{{ scan_script_remote }}"
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Run offline scan (generates timestamped report dir)
+  become_user: "{{ trivy_target_user }}"
+  environment:
+    SEVERITY: "{{ severity }}"
+    CACHE_DIR: "{{ trivy_cache_dir }}"
+  ansible.builtin.shell: "{{ scan_script_remote }}"
+  args:
+    chdir: "{{ trivy_reports_root }}"
+  register: _scan
+  failed_when: false
+
+- name: Show scan script output (for quick visibility)
+  ansible.builtin.debug:
+    var: _scan.stdout_lines
+
+- name: Find newest report directory on target
+  ansible.builtin.shell: |
+    ls -1dt {{ trivy_reports_root }}/trivy-reports-* 2>/dev/null | head -n1
+  args:
+    executable: /bin/bash
+  register: _latest_dir
+  changed_when: false
+
+- name: Fail if no report directory was produced
+  ansible.builtin.fail:
+    msg: "No report directory found under {{ trivy_reports_root }}."
+  when: _latest_dir.stdout | length == 0
+
+- name: Fetch reports back to control node
+  ansible.builtin.fetch:
+    src: "{{ item }}"
+    dest: "reports/{{ inventory_hostname }}/"
+    flat: yes
+  with_fileglob:
+    - "{{ _latest_dir.stdout }}/*.json"

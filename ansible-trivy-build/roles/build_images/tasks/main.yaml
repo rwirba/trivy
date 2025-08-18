@@ -1,0 +1,29 @@
+---
+- name: Ensure image folders exist
+  ansible.builtin.file:
+    path: "{{ base_dir }}/{{ item.name }}"
+    state: directory
+    mode: '0755'
+  loop: "{{ build_images_list }}"
+
+- name: Create Dockerfile for each image
+  ansible.builtin.copy:
+    dest: "{{ base_dir }}/{{ item.name }}/Dockerfile"
+    content: "{{ item.dockerfile }}"
+    mode: '0644'
+  loop: "{{ build_images_list }}"
+
+- name: Build Podman image in each folder (cd then build)
+  ansible.builtin.command:
+    cmd: podman build -t {{ item.name }}:{{ image_tag }} .
+    chdir: "{{ base_dir }}/{{ item.name }}"
+  loop: "{{ build_images_list }}"
+
+- name: Show resulting images
+  ansible.builtin.command: podman images --format "{{'{{.Repository}}:{{.Tag}}'}}"
+  register: built_images
+  changed_when: false
+
+- name: Print built image names
+  ansible.builtin.debug:
+    msg: "{{ built_images.stdout_lines }}"

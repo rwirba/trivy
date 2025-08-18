@@ -1,0 +1,16 @@
+---
+# Play 1: Build Podman images by cd'ing into each folder and running podman build
+- name: Build Podman images locally
+  hosts: localhost
+  gather_facts: false
+  become: true
+  roles:
+    - role: build_images
+
+# Play 2: Push Trivy offline DB, run offline scans, collect reports
+- name: Push Trivy offline DB, run offline scans with Podman, collect reports
+  hosts: offline_scanners
+  gather_facts: yes
+  become: true
+  roles:
+    - role: trivy_offline_scan

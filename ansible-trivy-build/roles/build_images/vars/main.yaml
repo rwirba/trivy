@@ -1,0 +1,49 @@
+# Base directory to create image folders (defaults to playbook directory)
+base_dir: "{{ playbook_dir }}"
+
+# Tag to use for all images built via podman
+image_tag: "v1"
+
+# List of images to build, with their Dockerfiles
+build_images_list:
+  - name: nginx
+    dockerfile: |
+      FROM registry.access.redhat.com/ubi8/ubi
+      LABEL maintainer="security@test.local"
+      RUN dnf install -y nginx-1.14.1 && \
+          dnf clean all
+      EXPOSE 80
+      CMD ["nginx", "-g", "daemon off;"]
+
+  - name: tomcat
+    dockerfile: |
+      FROM registry.access.redhat.com/ubi8/ubi
+      LABEL maintainer="security@test.local"
+      # Install Java 8 and tools
+      RUN dnf install -y java-1.8.0-openjdk wget unzip && \
+          dnf clean all
+      # Install old Tomcat manually
+      ENV TOMCAT_VERSION=8.5.42
+      RUN wget https://archive.apache.org/dist/tomcat/tomcat-8/v${TOMCAT_VERSION}/bin/apache-tomcat-${TOMCAT_VERSION}.tar.gz && \
+          tar -xvzf apache-tomcat-${TOMCAT_VERSION}.tar.gz && \
+          mv apache-tomcat-${TOMCAT_VERSION} /opt/tomcat && \
+          rm apache-tomcat-${TOMCAT_VERSION}.tar.gz
+      EXPOSE 8080
+      CMD ["/opt/tomcat/bin/catalina.sh", "run"]
+
+  - name: java
+    dockerfile: |
+      FROM registry.access.redhat.com/ubi8/ubi
+      LABEL maintainer="security@test.local"
+      RUN dnf install -y java-1.8.0-openjdk java-1.8.0-openjdk-devel && \
+          dnf clean all
+      CMD ["java", "-version"]
+
+  - name: ansible
+    dockerfile: |
+      FROM registry.access.redhat.com/ubi8/ubi
+      LABEL maintainer="security@test.local"
+      RUN dnf install -y python3 python3-pip && \
+          pip3 install ansible==2.9.6 && \
+          dnf clean all
+      CMD ["ansible", "--version"]

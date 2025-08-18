@@ -1,0 +1,12 @@
+plugin: amazon.aws.aws_ec2
+regions:
+  - us-east-1               # adjust
+filters:
+  tag:Project: TrivyLab
+hostnames:
+  - private-ip-address      # or public-ip-address if needed
+keyed_groups:
+  - key: tags.Project
+    prefix: ""
+compose:
+  ansible_user: ec2-user
