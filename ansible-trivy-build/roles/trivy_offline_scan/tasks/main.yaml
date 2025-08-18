@@ -87,12 +87,39 @@
     group: root
     mode: "0755"
 
+# NEW — make rootless Podman visible to Trivy
+- name: Get UID of scan user
+  become: true
+  ansible.builtin.command: id -u {{ trivy_target_user }}
+  register: _uid
+  changed_when: false
+
+- name: Allow user services to run (linger)
+  become: true
+  ansible.builtin.command: loginctl enable-linger {{ trivy_target_user }}
+  changed_when: false
+
+- name: Enable and start Podman user socket
+  become: true
+  become_user: "{{ trivy_target_user }}"
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ _uid.stdout }}"
+  ansible.builtin.command: systemctl --user enable --now podman.socket
+  register: _podman_socket
+  failed_when: false
+  changed_when: false
+
 - name: Run offline scan (generates timestamped report dir)
   become: true
   become_user: "{{ trivy_target_user }}"
   environment:
     SEVERITY: "{{ severity }}"
     CACHE_DIR: "{{ trivy_cache_dir }}"
+    TRIVY_IMAGE_SRC: "podman"
+    TRIVY_SKIP_DB_UPDATE: "true"
+    TRIVY_SKIP_JAVA_DB_UPDATE: "true"
+    TRIVY_OFFLINE_SCAN: "true"
+    XDG_RUNTIME_DIR: "/run/user/{{ _uid.stdout }}"
   ansible.builtin.shell: "{{ scan_script_remote }}"
   args:
     chdir: "{{ trivy_reports_root }}"
@@ -103,12 +130,85 @@
   ansible.builtin.debug:
     var: _scan.stdout_lines
 
-# --- Fetch reports from remote properly ---
-- name: Derive reports directory from output (fallback to newest)
+- name: Parse reports dir from stdout (robust)
+  ansible.builtin.set_fact:
+    reports_dir: >-
+      {{ (
+           _scan.stdout_lines
+           | select('search', 'Reports saved to:')
+           | list
+           | last
+           | default('')
+           | regex_replace('^.*Reports saved to:\\s*', '')
+         ) }}
+
+- name: Fallback to newest reports dir if not parsed
+  when: reports_dir | length == 0
+  ansible.builtin.shell: |
+    ls -1dt {{ trivy_reports_root }}/trivy-reports-* 2>/dev/null | head -n1
+  args: { executable: /bin/bash }
+  register: _latest_dir
+  changed_when: false
+
+- name: Use newest reports dir (fallback)
+  when: reports_dir | length == 0
+  ansible.builtin.set_fact:
+    reports_dir: "{{ _latest_dir.stdout | default('', true) }}"
+
+- name: Verify reports dir exists on remote
+  ansible.builtin.stat:
+    path: "{{ reports_dir }}"
+  register: _repdir
+
+- name: Fail if no report directory was produced
+  ansible.builtin.fail:
+    msg: "No report directory found under {{ trivy_reports_root }}."
+  when: reports_dir | length == 0 or not _repdir.stat.exists
+
+- name: List JSON reports on remote
+  ansible.builtin.find:
+    paths: "{{ reports_dir }}"
+    patterns: "*.json"
+    file_type: file
+  register: _report_files
+
+- name: Fetch reports back to control node
+  when: _report_files.files | length > 0
+  ansible.builtin.fetch:
+    src: "{{ item.path }}"
+    dest: "reports/{{ inventory_hostname }}/"
+    flat: true
+  loop: "{{ _report_files.files }}"
+
+
+# --- Fetch reports from remote properly (robust) ---
+- name: Parse reports dir from stdout (robust)
   ansible.builtin.set_fact:
     _reports_dir: >-
-      {{ (_scan.stdout | regex_search('Reports saved to:\\s*(\\S+)', '\\1')) |
-         default(lookup('pipe', 'ls -1dt ' ~ trivy_reports_root ~ '/trivy-reports-* 2>/dev/null | head -n1'), true) }}
+      {{
+        (
+          _scan.stdout_lines
+          | select('search', 'Reports saved to:')
+          | list
+          | last
+          | default('')
+          | regex_replace('^.*Reports saved to:\\s*', '')
+        )
+      }}
+
+- name: Fallback to newest reports dir if not parsed
+  when: _reports_dir | length == 0
+  ansible.builtin.shell: |
+    ls -1dt {{ trivy_reports_root }}/trivy-reports-* 2>/dev/null | head -n1
+  args:
+    executable: /bin/bash
+  register: _latest_dir
+  changed_when: false
+
+- name: Use newest reports dir (fallback)
+  when: _reports_dir | length == 0
+  ansible.builtin.set_fact:
+    _reports_dir: "{{ _latest_dir.stdout | default('', true) }}"
 
 - name: Verify reports dir exists on remote
   ansible.builtin.stat:
@@ -134,3 +234,4 @@
     dest: "reports/{{ inventory_hostname }}/"
     flat: true
   loop: "{{ _report_files.files }}"
+
