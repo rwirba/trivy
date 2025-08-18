@@ -117,14 +117,16 @@
     CACHE_DIR: "{{ trivy_cache_dir }}"
     TRIVY_IMAGE_SRC: "podman"
     TRIVY_SKIP_DB_UPDATE: "true"
-    TRIVY_SKIP_JAVA_DB_UPDATE: "true"
     TRIVY_OFFLINE_SCAN: "true"
+    TRIVY_VULN_TYPE: "os"        # <— scan OS packages only, no Java DB
+    TRIVY_SCANNERS: "vuln"       # <— disable secret/config scanners (optional)
     XDG_RUNTIME_DIR: "/run/user/{{ _uid.stdout }}"
   ansible.builtin.shell: "{{ scan_script_remote }}"
   args:
     chdir: "{{ trivy_reports_root }}"
   register: _scan
   failed_when: false
+
 
 - name: Show scan script output (for quick visibility)
   ansible.builtin.debug:
@@ -184,7 +186,7 @@
 # --- Fetch reports from remote properly (robust) ---
 - name: Parse reports dir from stdout (robust)
   ansible.builtin.set_fact:
-    _reports_dir: >-
+    _reports_dir_line: >-
       {{
         (
           _scan.stdout_lines
@@ -192,16 +194,17 @@
           | list
           | last
           | default('')
-          | regex_replace('^.*Reports saved to:\\s*', '')
         )
       }}
+- name: Extract only the path from the line
+  ansible.builtin.set_fact:
+    _reports_dir: "{{ _reports_dir_line | regex_replace('^.*Reports saved to:\\s*', '') }}"
 
-- name: Fallback to newest reports dir if not parsed
+- name: Fallback to newest reports dir if not parsed or invalid
   when: _reports_dir | length == 0
   ansible.builtin.shell: |
     ls -1dt {{ trivy_reports_root }}/trivy-reports-* 2>/dev/null | head -n1
-  args:
-    executable: /bin/bash
+  args: { executable: /bin/bash }
   register: _latest_dir
   changed_when: false
 
@@ -234,4 +237,3 @@
     dest: "reports/{{ inventory_hostname }}/"
     flat: true
   loop: "{{ _report_files.files }}"
-
