@@ -43,7 +43,7 @@ build_images_list:
     dockerfile: |
       FROM registry.access.redhat.com/ubi8/ubi
       LABEL maintainer="security@test.local"
-      RUN dnf install -y python3-pip rust-toolset openssl-devel && \
+      RUN dnf install -y python3-pip rust-toolset openssl-devel python3-devel && \
           pip3 install setuptools_rust && \
           pip3 install ansible-core && \
           dnf clean all
