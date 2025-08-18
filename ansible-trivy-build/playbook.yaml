@@ -13,4 +13,6 @@
   gather_facts: yes
   become: true
   roles:
-    - { role: trivy_offline_scan, tags: ['trivy_offline_scan'] }
+    - role: trivy_offline_scan
+      apply:
+        tags: ['trivy_offline_scan'] 
