@@ -9,7 +9,7 @@
 
 # Play 2: Push Trivy offline DB, run offline scans, collect reports
 - name: Push Trivy offline DB, run offline scans with Podman, collect reports
-  hosts: offline_scanners
+  hosts: all
   gather_facts: yes
   become: true
   roles:
