@@ -1,5 +1,5 @@
 # Paths on the CONTROL NODE (where you run ansible-playbook)
-trivy_db_tar_local: "/home/ubuntu/_trivy-db-build/trivy-offline.db.tgz"
+trivy_db_tar_local: "/home/ubuntu/trivy/_trivy-db-build/trivy-offline.db.tgz"
 scan_script_local:  "/home/ubuntu/trivy/ansible-trivy-build/offline-scan.sh"
 
 # Target user (on offline_scanners) that owns cache and runs scans
