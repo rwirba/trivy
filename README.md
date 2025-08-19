@@ -1,0 +1,1 @@
+scp -i ../Downloads/dev-key.pem -r ubuntu@controler-ip:/home/ubuntu/trivy/ansible-trivy-build/reports/remote-server-ip trivy-reports/
