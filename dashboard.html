@@ -60,8 +60,8 @@ hr{border:none;border-top:2px solid var(--line);margin:28px 0}
     <table>
       <thead>
         <tr>
-          <th>Image</th>
-          <th>CRIT</th><th>HIGH</th><th>MED</th><th>LOW</th><th>UNK</th><th>Total</th>
+          <th>Images</th>
+          <th>CRITICAL</th><th>HIGH</th><th>MEDIUM</th><th>LOW</th><th>UNKNOWN</th><th>Total</th>
         </tr>
       </thead>
       <tbody id="latest-tbody"></tbody>
@@ -73,9 +73,9 @@ hr{border:none;border-top:2px solid var(--line);margin:28px 0}
   <!-- SECTION 2: VULNERABILITIES VIEWER -->
   <h2>Trivy Vulnerabilities Viewer</h2>
   <div class="card controls">
-    <label class="chk"><input type="checkbox" class="sev" value="CRITICAL" checked> <span class="badge CRITICAL">CRIT</span></label>
+    <label class="chk"><input type="checkbox" class="sev" value="CRITICAL" checked> <span class="badge CRITICAL">CRITICAL</span></label>
     <label class="chk"><input type="checkbox" class="sev" value="HIGH" checked> <span class="badge HIGH">HIGH</span></label>
-    <label class="chk"><input type="checkbox" class="sev" value="MEDIUM" checked> <span class="badge MEDIUM">MED</span></label>
+    <label class="chk"><input type="checkbox" class="sev" value="MEDIUM" checked> <span class="badge MEDIUM">MEDIUM</span></label>
     <label class="chk"><input type="checkbox" class="sev" value="LOW" checked> <span class="badge LOW">LOW</span></label>
     <label class="chk"><input type="checkbox" class="sev" value="UNKNOWN"> <span class="badge UNKNOWN">UNK</span></label>
     <label class="chk"><input type="checkbox" id="fixonly"> Fix available only</label>
@@ -88,10 +88,10 @@ hr{border:none;border-top:2px solid var(--line);margin:28px 0}
       <thead>
         <tr>
           <th data-k="Severity">Severity</th>
-          <th data-k="Image">Image</th>
+          <th data-k="Images">Images</th>
           <th data-k="Pkg">Package</th>
-          <th data-k="Installed">Installed</th>
-          <th data-k="Fixed">Fix</th>
+          <th data-k="InstalledVersion">Installed Version</th>
+          <th data-k="FixedVersion">Fixed Version</th>
           <th data-k="CVE">CVE</th>
           <th data-k="Title">Advisory / Title</th>
         </tr>
@@ -405,7 +405,7 @@ function renderViewer(){
   CURRENT_ROWS.forEach(r=>counts[r.Severity]=(counts[r.Severity]||0)+1);
   document.getElementById('counts').textContent =
     `Showing ${CURRENT_ROWS.length} • ` +
-    `CRIT ${counts.CRITICAL||0} • HIGH ${counts.HIGH||0} • MED ${counts.MEDIUM||0} • LOW ${counts.LOW||0} • UNK ${counts.UNKNOWN||0}`;
+    `CRITICAL ${counts.CRITICAL||0} • HIGH ${counts.HIGH||0} • MEDIUM ${counts.MEDIUM||0} • LOW ${counts.LOW||0} • UNK ${counts.UNKNOWN||0}`;
 
   // enable CSV button
   document.getElementById('dl-vuls').disabled = CURRENT_ROWS.length===0;
