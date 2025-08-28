@@ -1,0 +1,450 @@
+{
+  "SchemaVersion": 2,
+  "CreatedAt": "2025-08-26T19:20:16.276917134Z",
+  "ArtifactName": "/tmp/trivy-archive-rM5r7w/localhost_sap-j21_latest.tar",
+  "ArtifactType": "container_image",
+  "Metadata": {
+    "OS": {
+      "Family": "redhat",
+      "Name": "8.10"
+    },
+    "ImageID": "sha256:a9ae0cbd3babd35e43e02bb0da054cca3533cb28fe879c2cc6991d12a8243fa0",
+    "DiffIDs": [
+      "sha256:2ff76d26bc63ae58824e835b041e65a91335b77fbc45c3d628f259cce07f144f",
+      "sha256:5f6d49773ec52f392e6316965c67bc98b8a7f70d3d9477732129347649832f83",
+      "sha256:f3afc4221895c4397d56d5c344a0a1b430a9de7831b752816fb82a59c7398f74",
+      "sha256:ac697f0c1d41d8447aa82c714531ca19f09e05d7cd03319a961faea2cc76b685",
+      "sha256:4cba6b0fc357364209ba5a1b599b77204218113838189799cffa2db1ea205d69",
+      "sha256:fee96646236774ff0d468d54f785bbc3f06cffb9ca92fec698db6e20f3680082"
+    ],
+    "ImageConfig": {
+      "architecture": "amd64",
+      "created": "2025-08-14T18:07:53.697929479Z",
+      "history": [
+        {
+          "created": "2025-03-13T11:34:15.047895819Z",
+          "created_by": "/bin/sh -c #(nop) ADD file:04e3bb8dbcc173469bd087cd598892daaf55ccbfd076b7ba5de6c0242fb54cb0 in / ",
+          "empty_layer": true
+        },
+        {
+          "created": "2025-03-13T11:34:15.924305518Z",
+          "created_by": "/bin/sh -c mv -f /etc/yum.repos.d/ubi.repo /tmp || :",
+          "empty_layer": true
+        },
+        {
+          "created": "2025-03-13T11:34:16.218900987Z",
+          "created_by": "/bin/sh -c #(nop) ADD file:df13b6a4fdeac4626ab7cd7e99d16d30edc6e3e5441295ae7691bee26604a5b1 in /tmp/tls-ca-bundle.pem ",
+          "empty_layer": true
+        },
+        {
+          "created": "2025-03-13T11:34:16.605381313Z",
+          "created_by": "/bin/sh -c #(nop) ADD multi:771be6fff9a852e557be99b0f12cda1b1c36d9bdb4af98b64a96cf7211fbeaa5 in /etc/yum.repos.d/ ",
+          "empty_layer": true
+        },
+        {
+          "created": "2025-03-13T11:34:16.605425709Z",
+          "created_by": "/bin/sh -c #(nop) LABEL maintainer=\"Red Hat, Inc.\"",
+          "empty_layer": true
+        },
+        {
+          "created": "2025-03-13T11:34:16.605531267Z",
+          "created_by": "/bin/sh -c #(nop) LABEL com.redhat.component=\"ubi8-container\"       name=\"ubi8\"       version=\"8.10\"",
+          "empty_layer": true
+        },
+        {
+          "created": "2025-03-13T11:34:16.605578667Z",
+          "created_by": "/bin/sh -c #(nop) LABEL com.redhat.license_terms=\"https://www.redhat.com/en/about/red-hat-end-user-license-agreements#UBI\"",
+          "empty_layer": true
+        },
+        {
+          "created": "2025-03-13T11:34:16.60561388Z",
+          "created_by": "/bin/sh -c #(nop) LABEL summary=\"Provides the latest release of Red Hat Universal Base Image 8.\"",
+          "empty_layer": true
+        },
+        {
+          "created": "2025-03-13T11:34:16.605729203Z",
+          "created_by": "/bin/sh -c #(nop) LABEL description=\"The Universal Base Image is designed and engineered to be the base layer for all of your containerized applications, middleware and utilities. This base image is freely redistributable, but Red Hat only supports Red Hat technologies through subscriptions for Red Hat products. This image is maintained by Red Hat and updated regularly.\"",
+          "empty_layer": true
+        },
+        {
+          "created": "2025-03-13T11:34:16.605770044Z",
+          "created_by": "/bin/sh -c #(nop) LABEL io.k8s.display-name=\"Red Hat Universal Base Image 8\"",
+          "empty_layer": true
+        },
+        {
+          "created": "2025-03-13T11:34:16.605805138Z",
+          "created_by": "/bin/sh -c #(nop) LABEL io.openshift.expose-services=\"\"",
+          "empty_layer": true
+        },
+        {
+          "created": "2025-03-13T11:34:16.605832194Z",
+          "created_by": "/bin/sh -c #(nop) LABEL io.openshift.tags=\"base rhel8\"",
+          "empty_layer": true
+        },
+        {
+          "created": "2025-03-13T11:34:16.605846652Z",
+          "created_by": "/bin/sh -c #(nop) ENV container oci",
+          "empty_layer": true
+        },
+        {
+          "created": "2025-03-13T11:34:16.605908993Z",
+          "created_by": "/bin/sh -c #(nop) ENV PATH /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+          "empty_layer": true
+        },
+        {
+          "created": "2025-03-13T11:34:16.60592357Z",
+          "created_by": "/bin/sh -c #(nop) CMD [\"/bin/bash\"]",
+          "empty_layer": true
+        },
+        {
+          "created": "2025-03-13T11:34:17.422485596Z",
+          "created_by": "/bin/sh -c rm -rf /var/log/*",
+          "empty_layer": true
+        },
+        {
+          "created": "2025-03-13T11:34:18.221313478Z",
+          "created_by": "/bin/sh -c mkdir -p /var/log/rhsm",
+          "empty_layer": true
+        },
+        {
+          "created": "2025-03-13T11:34:18.491113876Z",
+          "created_by": "/bin/sh -c #(nop) ADD file:b2504ac56e42d221cb97ae63b245e52d960e7417b4da4abdda91f820a1dd5708 in /root/buildinfo/content_manifests/ubi8-container-8.10-1184.1741863532.json ",
+          "empty_layer": true
+        },
+        {
+          "created": "2025-03-13T11:34:18.799596697Z",
+          "created_by": "/bin/sh -c #(nop) ADD file:fc0e17da15a231b0a8534ffb8ef0fbf087a6da1ff35f8721112100089ce4afc5 in /root/buildinfo/Dockerfile-ubi8-8.10-1184.1741863532 ",
+          "empty_layer": true
+        },
+        {
+          "created": "2025-03-13T11:34:18.799816644Z",
+          "created_by": "/bin/sh -c #(nop) LABEL \"release\"=\"1184.1741863532\" \"distribution-scope\"=\"public\" \"vendor\"=\"Red Hat, Inc.\" \"build-date\"=\"2025-03-13T10:59:43\" \"architecture\"=\"x86_64\" \"vcs-type\"=\"git\" \"vcs-ref\"=\"967861a8dbbb288b8cec9f1fee7ccbf6c7ee9a20\" \"io.k8s.description\"=\"The Universal Base Image is designed and engineered to be the base layer for all of your containerized applications, middleware and utilities. This base image is freely redistributable, but Red Hat only supports Red Hat technologies through subscriptions for Red Hat products. This image is maintained by Red Hat and updated regularly.\" \"url\"=\"https://access.redhat.com/containers/#/registry.access.redhat.com/ubi8/images/8.10-1184.1741863532\"",
+          "empty_layer": true
+        },
+        {
+          "created": "2025-03-13T11:34:19.678426013Z",
+          "created_by": "/bin/sh -c rm -f '/etc/yum.repos.d/odcs-3978716-29051.repo' '/etc/yum.repos.d/rhel-8.10-compose-0e878.repo'",
+          "empty_layer": true
+        },
+        {
+          "created": "2025-03-13T11:34:20.729464853Z",
+          "created_by": "/bin/sh -c rm -f /tmp/tls-ca-bundle.pem",
+          "empty_layer": true
+        },
+        {
+          "created": "2025-03-13T11:34:23.860418304Z",
+          "created_by": "/bin/sh -c mv -fZ /tmp/ubi.repo /etc/yum.repos.d/ubi.repo || :"
+        },
+        {
+          "created": "2025-08-07T14:17:12.434465666Z",
+          "created_by": "/bin/sh -c #(nop) COPY multi:060ded900a9d959438003907ed1250e1446f99bf372846fd9432f7aa9c53b9e3 in /templates/ ",
+          "comment": "FROM localhost/ubi8:8.10"
+        },
+        {
+          "created": "2025-08-07T14:17:12.86142596Z",
+          "created_by": "/bin/sh -c #(nop) COPY multi:31d1bb297ecf56f94c2c553fd58dbb75f9755775b4022b03b5687b39fb4d8016 in /sap_scripts/ ",
+          "comment": "FROM b9be70492d69"
+        },
+        {
+          "created": "2025-08-07T14:18:34.821502997Z",
+          "created_by": "/bin/sh -c  sed -i \"s/enabled=0/enabled=1/\" /etc/dnf/plugins/subscription-manager.conf \u0026\u0026       chmod +x /sap_scripts/* \u0026\u0026      chmod +x /templates/* \u0026\u0026      mkdir /saprpms \u0026\u0026      mkdir /usr/sap \u0026\u0026      mkdir /sapmnt \u0026\u0026      mkdir -p /installation_files \u0026\u0026      touch /usr/sap/.novolume \u0026\u0026      touch /sapmnt/.novolume \u0026\u0026      ln -s /etc/pki/entitlement-host /etc/pki/entitlement \u0026\u0026      ln /etc/rhsm-host /etc/rhsm \u0026\u0026      rm /etc/yum.repos.d/ubi.repo  \u0026\u0026      ln -s /run/secrets/redhat.repo /etc/yum.repos.d/redhat.repo \u0026\u0026      dnf update -y \u0026\u0026      dnf install -y --nodocs uuid libicu libatomic libaio expect bind-utils psmisc libtool-ltdl hostname libnsl.so.2 python3.12 uuidd glib2 tcsh numactl net-tools iproute iputils wget nano curl ncurses policycoreutils compat-sap-c++-11.x86_64 procps \u0026\u0026      dnf clean all \u0026\u0026      echo root:changeme | chpasswd \u0026\u0026      groupadd sapsys -g 1001 \u0026\u0026      useradd -d /home/sapuser -g sapsys -m sapuser \u0026\u0026      useradd -d /home/sapadm -g sapsys -m -s /bin/false sapadm \u0026\u0026      useradd -d /home/j21adm -g sapsys -m -s /bin/csh j21adm  \u0026\u0026      cp /templates/99-sap-limits.conf /etc/security/limits.d \u0026\u0026      echo \"@sapsys\tsoft \tnofile\t\t65536\" \u003e\u003e /etc/security/limits.conf \u0026\u0026      echo \"@sapsys\thard \tnofile\t\t65536\" \u003e\u003e /etc/security/limits.conf \u0026\u0026      sed -i \"s/enabled=1/enabled=0/\" /etc/dnf/plugins/subscription-manager.conf ",
+          "comment": "FROM cb139ddbd3ff"
+        },
+        {
+          "created": "2025-08-07T14:18:37.22443048Z",
+          "created_by": "/bin/sh -c #(nop) EXPOSE 8000",
+          "comment": "FROM e37622ef2669",
+          "empty_layer": true
+        },
+        {
+          "created": "2025-08-07T14:18:37.282947568Z",
+          "created_by": "/bin/sh -c #(nop) EXPOSE 44300",
+          "comment": "FROM 4e6431fd8c35",
+          "empty_layer": true
+        },
+        {
+          "created": "2025-08-07T14:18:37.340941205Z",
+          "created_by": "/bin/sh -c #(nop) EXPOSE 3300",
+          "comment": "FROM 8ff6e39eae67",
+          "empty_layer": true
+        },
+        {
+          "created": "2025-08-07T14:18:37.399395019Z",
+          "created_by": "/bin/sh -c #(nop) EXPOSE 3200",
+          "comment": "FROM a1e34415b1d4",
+          "empty_layer": true
+        },
+        {
+          "created": "2025-08-07T14:18:37.461274616Z",
+          "created_by": "/bin/sh -c #(nop) EXPOSE 4237",
+          "comment": "FROM 43ac6af96ca0",
+          "empty_layer": true
+        },
+        {
+          "created": "2025-08-07T14:18:37.525728015Z",
+          "created_by": "/bin/sh -c #(nop) EXPOSE 50000",
+          "comment": "FROM 49b63eed1657",
+          "empty_layer": true
+        },
+        {
+          "created": "2025-08-07T14:18:37.583386604Z",
+          "created_by": "/bin/sh -c #(nop) EXPOSE 44300",
+          "comment": "FROM 4061c6cff98e",
+          "empty_layer": true
+        },
+        {
+          "created": "2025-08-07T14:18:37.634645486Z",
+          "created_by": "/bin/sh -c #(nop) EXPOSE 1129",
+          "comment": "FROM 9283d424c600",
+          "empty_layer": true
+        },
+        {
+          "created": "2025-08-07T14:18:37.668754825Z",
+          "created_by": "/bin/sh -c #(nop) EXPOSE 1128",
+          "comment": "FROM e2a39f3eaaff",
+          "empty_layer": true
+        },
+        {
+          "created": "2025-08-07T14:18:37.701943034Z",
+          "created_by": "/bin/sh -c #(nop) EXPOSE 3601",
+          "comment": "FROM 8088b5274ade",
+          "empty_layer": true
+        },
+        {
+          "created": "2025-08-07T14:18:37.759845071Z",
+          "created_by": "/bin/sh -c #(nop) EXPOSE 30215",
+          "comment": "FROM 83b42c677504",
+          "empty_layer": true
+        },
+        {
+          "created": "2025-08-07T14:18:37.822707807Z",
+          "created_by": "/bin/sh -c #(nop) EXPOSE 30213",
+          "comment": "FROM 24b10dac9e97",
+          "empty_layer": true
+        },
+        {
+          "created": "2025-08-07T14:18:37.882696613Z",
+          "created_by": "/bin/sh -c #(nop) EXPOSE 40000",
+          "comment": "FROM dc833b6d457e",
+          "empty_layer": true
+        },
+        {
+          "created": "2025-08-07T14:18:37.943732772Z",
+          "created_by": "/bin/sh -c #(nop) ENV container oci",
+          "comment": "FROM 73b2eaf45827",
+          "empty_layer": true
+        },
+        {
+          "created": "2025-08-07T14:18:38.008460289Z",
+          "created_by": "/bin/sh -c #(nop) ENV PATH /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+          "comment": "FROM 82b37fbd78db",
+          "empty_layer": true
+        },
+        {
+          "created": "2025-08-07T14:18:38.073398037Z",
+          "created_by": "/bin/sh -c #(nop) ENTRYPOINT [\"/sap_scripts/entrypoint.sh\"]",
+          "comment": "FROM 31e700f776ec",
+          "empty_layer": true
+        },
+        {
+          "created": "2025-08-07T14:18:38.142900666Z",
+          "created_by": "/bin/sh -c #(nop) CMD [\"INIT=START\"]",
+          "comment": "FROM b17dff6eb542",
+          "empty_layer": true
+        },
+        {
+          "created": "2025-08-07T14:45:13.588982394Z",
+          "created_by": "/bin/sh",
+          "comment": "FROM localhost/sap-j21:latest"
+        },
+        {
+          "created": "2025-08-14T18:07:53.855261574Z",
+          "created_by": "/bin/sh",
+          "comment": "FROM localhost/sap-j21:latest"
+        }
+      ],
+      "os": "linux",
+      "rootfs": {
+        "type": "layers",
+        "diff_ids": [
+          "sha256:2ff76d26bc63ae58824e835b041e65a91335b77fbc45c3d628f259cce07f144f",
+          "sha256:5f6d49773ec52f392e6316965c67bc98b8a7f70d3d9477732129347649832f83",
+          "sha256:f3afc4221895c4397d56d5c344a0a1b430a9de7831b752816fb82a59c7398f74",
+          "sha256:ac697f0c1d41d8447aa82c714531ca19f09e05d7cd03319a961faea2cc76b685",
+          "sha256:4cba6b0fc357364209ba5a1b599b77204218113838189799cffa2db1ea205d69",
+          "sha256:fee96646236774ff0d468d54f785bbc3f06cffb9ca92fec698db6e20f3680082"
+        ]
+      },
+      "config": {
+        "Cmd": [
+          "INIT=START"
+        ],
+        "Entrypoint": [
+          "/sap_scripts/entrypoint.sh"
+        ],
+        "Env": [
+          "HOSTNAME=sap-j21",
+          "TERM=xterm",
+          "SAPINST_INSTALL_DIRECTORY=/installation_files/SWPM_1.0",
+          "SAP_SYSTEM_NAME=J21",
+          "TIMEOUT=300",
+          "INSTALL_DIRECTORY=/installation_files",
+          "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+          "container=oci"
+        ],
+        "Labels": {
+          "PODMAN_SYSTEMD_UNIT": "podman-compose@sap-j21.service",
+          "architecture": "x86_64",
+          "build-date": "2025-03-13T10:59:43",
+          "com.docker.compose.container-number": "1",
+          "com.docker.compose.project": "sap-j21",
+          "com.docker.compose.project.config_files": "run-sap-j21.yml",
+          "com.docker.compose.project.working_dir": "/home/sapuser/ContainerBuild/sap-j21",
+          "com.docker.compose.service": "sap-j21",
+          "com.redhat.component": "ubi8-container",
+          "com.redhat.license_terms": "https://www.redhat.com/en/about/red-hat-end-user-license-agreements#UBI",
+          "description": "The Universal Base Image is designed and engineered to be the base layer for all of your containerized applications, middleware and utilities. This base image is freely redistributable, but Red Hat only supports Red Hat technologies through subscriptions for Red Hat products. This image is maintained by Red Hat and updated regularly.",
+          "distribution-scope": "public",
+          "io.buildah.version": "1.33.12",
+          "io.k8s.description": "The Universal Base Image is designed and engineered to be the base layer for all of your containerized applications, middleware and utilities. This base image is freely redistributable, but Red Hat only supports Red Hat technologies through subscriptions for Red Hat products. This image is maintained by Red Hat and updated regularly.",
+          "io.k8s.display-name": "Red Hat Universal Base Image 8",
+          "io.openshift.expose-services": "",
+          "io.openshift.tags": "base rhel8",
+          "io.podman.compose.config-hash": "cddb7d188452391fae62f4f96f2cdcdb5a846190fcb6746a68b06824b681bb0c",
+          "io.podman.compose.project": "sap-j21",
+          "io.podman.compose.version": "1.0.6",
+          "maintainer": "Red Hat, Inc.",
+          "name": "ubi8",
+          "release": "1184.1741863532",
+          "summary": "Provides the latest release of Red Hat Universal Base Image 8.",
+          "url": "https://access.redhat.com/containers/#/registry.access.redhat.com/ubi8/images/8.10-1184.1741863532",
+          "vcs-ref": "967861a8dbbb288b8cec9f1fee7ccbf6c7ee9a20",
+          "vcs-type": "git",
+          "vendor": "Red Hat, Inc.",
+          "version": "8.10"
+        },
+        "WorkingDir": "/",
+        "ExposedPorts": {
+          "1128/tcp": {},
+          "1129/tcp": {},
+          "30213/tcp": {},
+          "30215/tcp": {},
+          "3200/tcp": {},
+          "3300/tcp": {},
+          "3304/tcp": {},
+          "3601/tcp": {},
+          "3604/tcp": {},
+          "40000/tcp": {},
+          "4237/tcp": {},
+          "4240/tcp": {},
+          "44300/tcp": {},
+          "50000/tcp": {},
+          "50300/tcp": {},
+          "50313/tcp": {},
+          "50413/tcp": {},
+          "8000/tcp": {},
+          "8104/tcp": {}
+        }
+      }
+    }
+  },
+  "Results": [
+    {
+      "Target": "/tmp/trivy-archive-rM5r7w/localhost_sap-j21_latest.tar (redhat 8.10)",
+      "Class": "os-pkgs",
+      "Type": "redhat",
+      "Vulnerabilities": [
+        {
+          "VulnerabilityID": "CVE-2025-5914",
+          "PkgID": "libarchive@3.3.3-5.el8.x86_64",
+          "PkgName": "libarchive",
+          "PkgIdentifier": {
+            "PURL": "pkg:rpm/redhat/libarchive@3.3.3-5.el8?arch=x86_64\u0026distro=redhat-8.10",
+            "UID": "ba3087a37e0e5a5c"
+          },
+          "InstalledVersion": "3.3.3-5.el8",
+          "Status": "affected",
+          "Layer": {
+            "DiffID": "sha256:2ff76d26bc63ae58824e835b041e65a91335b77fbc45c3d628f259cce07f144f"
+          },
+          "SeveritySource": "redhat",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2025-5914",
+          "Title": "libarchive: Double free at archive_read_format_rar_seek_data() in archive_read_support_format_rar.c",
+          "Description": "A vulnerability has been identified in the libarchive library, specifically within the archive_read_format_rar_seek_data() function. This flaw involves an integer overflow that can ultimately lead to a double-free condition. Exploiting a double-free vulnerability can result in memory corruption, enabling an attacker to execute arbitrary code or cause a denial-of-service condition.",
+          "Severity": "HIGH",
+          "CweIDs": [
+            "CWE-415"
+          ],
+          "VendorSeverity": {
+            "amazon": 3,
+            "nvd": 4,
+            "photon": 3,
+            "redhat": 3,
+            "ubuntu": 2
+          },
+          "CVSS": {
+            "nvd": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+              "V3Score": 9.8
+            },
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:R/S:U/C:H/I:H/A:H",
+              "V3Score": 7.3
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2025-5914",
+            "https://bugzilla.redhat.com/show_bug.cgi?id=2370861",
+            "https://github.com/libarchive/libarchive/pull/2598",
+            "https://github.com/libarchive/libarchive/pull/2598/commits/196029dd0a17cd17c916eada9085839032b76ec9",
+            "https://github.com/libarchive/libarchive/releases/tag/v3.8.0",
+            "https://nvd.nist.gov/vuln/detail/CVE-2025-5914",
+            "https://ubuntu.com/security/notices/USN-7601-1",
+            "https://www.cve.org/CVERecord?id=CVE-2025-5914"
+          ],
+          "PublishedDate": "2025-06-09T20:15:26.123Z",
+          "LastModifiedDate": "2025-08-12T11:15:27.42Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2025-8941",
+          "PkgID": "pam@1.3.1-37.el8_10.x86_64",
+          "PkgName": "pam",
+          "PkgIdentifier": {
+            "PURL": "pkg:rpm/redhat/pam@1.3.1-37.el8_10?arch=x86_64\u0026distro=redhat-8.10",
+            "UID": "c986a123430587c1"
+          },
+          "InstalledVersion": "1.3.1-37.el8_10",
+          "Status": "affected",
+          "Layer": {
+            "DiffID": "sha256:ac697f0c1d41d8447aa82c714531ca19f09e05d7cd03319a961faea2cc76b685"
+          },
+          "SeveritySource": "redhat",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2025-8941",
+          "Title": "linux-pam: Incomplete fix for CVE-2025-6020",
+          "Description": "A flaw was found in linux-pam. The pam_namespace module may improperly handle user-controlled paths, allowing local users to exploit symlink attacks and race conditions to elevate their privileges to root. This CVE provides a \"complete\" fix for CVE-2025-6020.",
+          "Severity": "HIGH",
+          "CweIDs": [
+            "CWE-22"
+          ],
+          "VendorSeverity": {
+            "redhat": 3
+          },
+          "CVSS": {
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H",
+              "V3Score": 7.8
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2025-8941",
+            "https://bugzilla.redhat.com/show_bug.cgi?id=2388220",
+            "https://nvd.nist.gov/vuln/detail/CVE-2025-8941",
+            "https://www.cve.org/CVERecord?id=CVE-2025-8941"
+          ],
+          "PublishedDate": "2025-08-13T15:15:41.873Z",
+          "LastModifiedDate": "2025-08-13T17:33:46.673Z"
+        }
+      ]
+    }
+  ]
+}
