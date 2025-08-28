@@ -20,7 +20,7 @@ set -euo pipefail
 #   EXTERNAL_TIMEOUT=""               # optional outer 'timeout' wrapper per scan, e.g. "12m"
 # ============================================
 
-SEVERITY="${SEVERITY:-HIGH,CRITICAL}"
+SEVERITY="${SEVERITY:-}"
 CACHE_DIR="${CACHE_DIR:-$HOME/.cache/trivy}"
 ONLY_TAGGED="${ONLY_TAGGED:-true}"
 FORCE_ARCHIVE="${FORCE_ARCHIVE:-true}"     # default to archive mode for reliability
@@ -55,11 +55,11 @@ TRIVY_FLAGS_COMMON=(
   --skip-db-update
   --offline-scan
   --cache-dir "$CACHE_DIR"
-  --severity "$SEVERITY"
   --format json
   --timeout "$TRIVY_TIMEOUT"
 )
-# Optional tuning from env
+# Optional tuning from env 
+[[ -n "$SEVERITY"        ]] && TRIVY_FLAGS_COMMON+=( --severity "$SEVERITY" )
 [[ -n "${TRIVY_PKG_TYPES:-}" ]] && TRIVY_FLAGS_COMMON+=( --pkg-types "$TRIVY_PKG_TYPES" )
 [[ -n "${TRIVY_SCANNERS:-}"  ]] && TRIVY_FLAGS_COMMON+=( --scanners "$TRIVY_SCANNERS" )
 
