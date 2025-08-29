@@ -15,7 +15,7 @@ set -euo pipefail
 #   TRIVY_SCANNERS="vuln"             # optional: disable secret/config scans if you want
 # ================================
 
-SEVERITY="${SEVERITY:-HIGH,CRITICAL}"
+SEVERITY="${SEVERITY:-}"
 CACHE_DIR="${CACHE_DIR:-$HOME/.cache/trivy}"
 ONLY_TAGGED="${ONLY_TAGGED:-true}"
 
@@ -36,10 +36,10 @@ TRIVY_FLAGS=(
   --offline-scan
   --image-src podman
   --cache-dir "$CACHE_DIR"
-  --severity "$SEVERITY"
   --format json
 )
 # Optional tuning from env (don’t add if not set)
+[[ -n "$SEVERITY"            ]] && TRIVY_FLAGS_COMMON+=( --severity "$SEVERITY" )
 [[ -n "${TRIVY_PKG_TYPES:-}" ]] && TRIVY_FLAGS+=( --pkg-types "$TRIVY_PKG_TYPES" )
 [[ -n "${TRIVY_SCANNERS:-}"  ]] && TRIVY_FLAGS+=( --scanners "$TRIVY_SCANNERS" )
 
