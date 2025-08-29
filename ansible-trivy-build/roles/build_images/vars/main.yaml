@@ -7,45 +7,103 @@ image_tag: "v1"
 build_images_list:
   - name: nginx
     dockerfile: |
-      FROM registry.access.redhat.com/ubi8/ubi
+      # FROM registry.access.redhat.com/ubi8/ubi
+      # LABEL maintainer="security@test.local"
+      # RUN dnf install -y nginx-1.14.1 && \
+      #     dnf clean all
+      # EXPOSE 80
+      # CMD ["nginx", "-g", "daemon off;"]
+
+      FROM registry.access.redhat.com/ubi9/nginx-124:latest
       LABEL maintainer="security@test.local"
-      RUN dnf install -y nginx-1.14.1 && \
-          dnf clean all
-      EXPOSE 80
+
+      # Runs as non-root (1001) by default on this image
+      USER 1001
+
+      # This image listens on 8080 internally
+      EXPOSE 8080
+
       CMD ["nginx", "-g", "daemon off;"]
 
   - name: tomcat
     dockerfile: |
-      FROM registry.access.redhat.com/ubi8/ubi
+      # FROM registry.access.redhat.com/ubi8/ubi
+      # LABEL maintainer="security@test.local"
+      # # Install Java 8 and tools
+      # RUN dnf install -y java-1.8.0-openjdk wget unzip && \
+      #     dnf clean all
+      # # Install old Tomcat manually
+      # ENV TOMCAT_VERSION=8.5.42
+      # RUN wget https://archive.apache.org/dist/tomcat/tomcat-8/v${TOMCAT_VERSION}/bin/apache-tomcat-${TOMCAT_VERSION}.tar.gz && \
+      #     tar -xvzf apache-tomcat-${TOMCAT_VERSION}.tar.gz && \
+      #     mv apache-tomcat-${TOMCAT_VERSION} /opt/tomcat && \
+      #     rm apache-tomcat-${TOMCAT_VERSION}.tar.gz
+      # EXPOSE 8080
+      # CMD ["/opt/tomcat/bin/catalina.sh", "run"]
+
+      FROM registry.access.redhat.com/ubi9/openjdk-17-runtime:latest
       LABEL maintainer="security@test.local"
-      # Install Java 8 and tools
-      RUN dnf install -y java-1.8.0-openjdk wget unzip && \
-          dnf clean all
-      # Install old Tomcat manually
-      ENV TOMCAT_VERSION=8.5.42
-      RUN wget https://archive.apache.org/dist/tomcat/tomcat-8/v${TOMCAT_VERSION}/bin/apache-tomcat-${TOMCAT_VERSION}.tar.gz && \
-          tar -xvzf apache-tomcat-${TOMCAT_VERSION}.tar.gz && \
-          mv apache-tomcat-${TOMCAT_VERSION} /opt/tomcat && \
-          rm apache-tomcat-${TOMCAT_VERSION}.tar.gz
+
+      # Pick a current Tomcat 9; update as needed
+      ARG TOMCAT_VERSION=9.0.108
+      ENV CATALINA_HOME=/opt/tomcat
+      ENV PATH="${CATALINA_HOME}/bin:${PATH}"
+
+      # Minimal tools just to fetch + unpack Tomcat, then clean
+      RUN microdnf -y update && microdnf -y install curl tar gzip \
+          && curl -fsSL "https://dlcdn.apache.org/tomcat/tomcat-9/v${TOMCAT_VERSION}/bin/apache-tomcat-${TOMCAT_VERSION}.tar.gz" -o /tmp/tomcat.tgz \
+          && mkdir -p "${CATALINA_HOME}" \
+          && tar -xzf /tmp/tomcat.tgz -C /opt \
+          && mv /opt/apache-tomcat-${TOMCAT_VERSION}/* "${CATALINA_HOME}/" \
+          && rm -rf /tmp/tomcat.tgz /opt/apache-tomcat-${TOMCAT_VERSION} \
+          && microdnf -y remove curl tar gzip && microdnf clean all
+
+      # Harden perms; drop root
+      RUN chgrp -R 0 "${CATALINA_HOME}" && chmod -R g=u "${CATALINA_HOME}"
+      USER 1001
+
       EXPOSE 8080
-      CMD ["/opt/tomcat/bin/catalina.sh", "run"]
+      CMD ["catalina.sh", "run"]
+
 
   - name: java
     dockerfile: |
-      FROM registry.access.redhat.com/ubi8/ubi
+      # FROM registry.access.redhat.com/ubi8/ubi
+      # LABEL maintainer="security@test.local"
+      # RUN dnf install -y java-1.8.0-openjdk java-1.8.0-openjdk-devel && \
+      #     dnf clean all
+      # CMD ["java", "-version"]
+
+      FROM registry.access.redhat.com/ubi9/openjdk-17-runtime:latest
       LABEL maintainer="security@test.local"
-      RUN dnf install -y java-1.8.0-openjdk java-1.8.0-openjdk-devel && \
-          dnf clean all
+
+      # Non-root
+      USER 1001
+
       CMD ["java", "-version"]
 
   - name: ansible
     dockerfile: |
-      FROM registry.access.redhat.com/ubi8/ubi
+      # FROM registry.access.redhat.com/ubi8/ubi
+      # LABEL maintainer="security@test.local"
+      # RUN dnf install -y python3-pip rust-toolset openssl-devel python3-devel && \
+      #     pip3 install setuptools_rust && \
+      #     pip3 install ansible-core && \
+      #     dnf clean all
+      # CMD [ "ansible", "--version" ]
+
+
+      FROM registry.access.redhat.com/ubi9/python-311:latest
       LABEL maintainer="security@test.local"
-      RUN dnf install -y python3-pip rust-toolset openssl-devel python3-devel && \
-          pip3 install setuptools_rust && \
-          pip3 install ansible-core && \
-          dnf clean all
-      CMD [ "ansible", "--version" ]
+
+      # Pull latest security fixes for base OS, then install ansible-core from PyPI
+      RUN dnf -y update && dnf clean all && \
+          pip3 install --no-cache-dir --upgrade "ansible-core>=2.17,<2.18"
+
+      # Non-root
+      USER 1001
+
+      CMD ["ansible", "--version"]
+
 
 

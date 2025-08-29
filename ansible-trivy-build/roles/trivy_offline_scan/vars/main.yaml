@@ -16,4 +16,4 @@ trivy_db_tar_remote: "{{ trivy_stage_dir }}/trivy-offline.db.tgz"
 scan_script_remote:  "/usr/local/bin/offline-trivy-scan.sh"
 
 # Scan behavior
-severity: "HIGH,CRITICAL"
+severity: "HIGH,CRITICAL,MEDIUM,LOW,UNKNOWN"
