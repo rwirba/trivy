@@ -24,13 +24,13 @@ build_images_list:
       
       USER root 
 
-      RUN dnf -y update && dnf -y install tar gzip \
+      RUN microdnf -y update && microdnf -y install tar gzip \
           && curl -fsSL "https://dlcdn.apache.org/tomcat/tomcat-9/v${TOMCAT_VERSION}/bin/apache-tomcat-${TOMCAT_VERSION}.tar.gz" -o /tmp/tomcat.tgz \
           && mkdir -p "${CATALINA_HOME}" \
           && tar -xzf /tmp/tomcat.tgz -C /opt \
           && mv /opt/apache-tomcat-${TOMCAT_VERSION}/* "${CATALINA_HOME}/" \
           && rm -rf /tmp/tomcat.tgz /opt/apache-tomcat-${TOMCAT_VERSION} \
-          && dnf -y remove curl tar gzip && dnf clean all
+          && microdnf -y remove curl tar gzip && microdnf clean all
 
       RUN chgrp -R 0 "${CATALINA_HOME}" && chmod -R g=u "${CATALINA_HOME}"
       USER 1001
@@ -54,7 +54,7 @@ build_images_list:
       LABEL maintainer="security@test.local"
       
       USER root
-      RUN dnf -y update && dnf clean all && \
+      RUN microdnf -y update && microdnf clean all && \
           pip3 install --no-cache-dir --upgrade "ansible-core>=2.17,<2.18"
 
       USER 1001
