@@ -21,6 +21,8 @@ build_images_list:
       ARG TOMCAT_VERSION=9.0.108
       ENV CATALINA_HOME=/opt/tomcat
       ENV PATH="${CATALINA_HOME}/bin:${PATH}"
+      
+      USER root 
 
       RUN microdnf -y update && microdnf -y install curl tar gzip \
           && curl -fsSL "https://dlcdn.apache.org/tomcat/tomcat-9/v${TOMCAT_VERSION}/bin/apache-tomcat-${TOMCAT_VERSION}.tar.gz" -o /tmp/tomcat.tgz \
@@ -50,7 +52,8 @@ build_images_list:
     dockerfile: |
       FROM registry.access.redhat.com/ubi9/python-311:latest
       LABEL maintainer="security@test.local"
-
+      
+      USER root
       RUN dnf -y update && dnf clean all && \
           pip3 install --no-cache-dir --upgrade "ansible-core>=2.17,<2.18"
 
