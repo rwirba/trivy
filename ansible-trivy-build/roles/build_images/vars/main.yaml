@@ -15,29 +15,19 @@ build_images_list:
 
   - name: tomcat
     dockerfile: |
-      FROM registry.access.redhat.com/ubi9/openjdk-17-runtime:latest
+      FROM registry.access.redhat.com/ubi9/ubi
       LABEL maintainer="security@test.local"
-
-      ARG TOMCAT_VERSION=9.0.108
-      ENV CATALINA_HOME=/opt/tomcat
-      ENV PATH="${CATALINA_HOME}/bin:${PATH}"
-      
-      USER root 
-
-      RUN microdnf -y update && microdnf -y install tar gzip \
-          && curl -fsSL "https://dlcdn.apache.org/tomcat/tomcat-9/v${TOMCAT_VERSION}/bin/apache-tomcat-${TOMCAT_VERSION}.tar.gz" -o /tmp/tomcat.tgz \
-          && mkdir -p "${CATALINA_HOME}" \
-          && tar -xzf /tmp/tomcat.tgz -C /opt \
-          && mv /opt/apache-tomcat-${TOMCAT_VERSION}/* "${CATALINA_HOME}/" \
-          && rm -rf /tmp/tomcat.tgz /opt/apache-tomcat-${TOMCAT_VERSION} \
-          && microdnf -y remove curl tar gzip && microdnf clean all
-
-      RUN chgrp -R 0 "${CATALINA_HOME}" && chmod -R g=u "${CATALINA_HOME}"
-      USER 1001
-
+      # Install Java 17 and tools
+      RUN dnf install -y java-17.0.12-openjdk wget unzip && \
+          dnf clean all
+      # Install old Tomcat manually
+      ENV TOMCAT_VERSION=9.0.108
+      RUN wget https://archive.apache.org/dist/tomcat/tomcat-9/v${TOMCAT_VERSION}/bin/apache-tomcat-${TOMCAT_VERSION}.tar.gz && \
+          tar -xvzf apache-tomcat-${TOMCAT_VERSION}.tar.gz && \
+          mv apache-tomcat-${TOMCAT_VERSION} /opt/tomcat && \
+          rm apache-tomcat-${TOMCAT_VERSION}.tar.gz
       EXPOSE 8080
-      CMD ["catalina.sh", "run"]
-
+      CMD ["/opt/tomcat/bin/catalina.sh", "run"]
 
   - name: java
     dockerfile: |
