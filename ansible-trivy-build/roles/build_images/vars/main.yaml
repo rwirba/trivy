@@ -40,16 +40,18 @@ build_images_list:
 
   - name: ansible
     dockerfile: |
-      FROM registry.access.redhat.com/ubi9/python-311:latest
+      FROM registry.access.redhat.com/ubi9/ubi
       LABEL maintainer="security@test.local"
       
       USER root
-      RUN microdnf -y update && microdnf clean all && \
-          pip3 install --no-cache-dir --upgrade "ansible-core>=2.17,<2.18"
+      RUN dnf install -y python3-pip rust-toolset openssl-devel python3-devel && \
+          pip3 install setuptools_rust && \
+          pip3 install ansible-core && \
+          dnf clean all 
+      USER nobody    
+      CMD [ "ansible", "--version" ]
 
-      USER 1001
 
-      CMD ["ansible", "--version"]
 
 
 
