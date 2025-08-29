@@ -17,7 +17,7 @@
   become: true
   become_user: ec2-user
   ansible.builtin.command:
-    cmd: podman build -t {{ item.name }}:{{ image_tag }} .
+    cmd: podman build --no-cache -t {{ item.name }}:{{ image_tag }} .
     chdir: "{{ base_dir }}/{{ item.name }}"
   loop: "{{ build_images_list }}"
 
