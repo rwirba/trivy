@@ -209,9 +209,21 @@ function dateFromLastModified(file){
 function countsFromJson(json){
   const c = {CRITICAL:0,HIGH:0,MEDIUM:0,LOW:0,UNKNOWN:0};
   (json.Results||[]).forEach(res=>{
-    (res.Vulnerabilities||[]).forEach(v=>{
-      const s=(v.Severity||'UNKNOWN').toUpperCase(); c[s]=(c[s]||0)+1;
-    });
+    if (res.Vulnerabilities) {
+      res.Vulnerabilities.forEach(v=>{
+        const s = (v.Severity || 'UNKNOWN').toUpperCase();
+        if (c[s] !== undefined) c[s] += 1;
+      });
+    }
+    // handle nested results (sometimes Trivy places vulns in res.Packages or SBOM entries)
+    if (res.Packages) {
+      res.Packages.forEach(pkg=>{
+        (pkg.Vulnerabilities||[]).forEach(v=>{
+          const s = (v.Severity || 'UNKNOWN').toUpperCase();
+          if (c[s] !== undefined) c[s] += 1;
+        });
+      });
+    }
   });
   return c;
 }
