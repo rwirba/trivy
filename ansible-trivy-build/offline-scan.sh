@@ -53,6 +53,22 @@ else
   fi
 fi
 
+# --- detect Trivy version ---
+TRIVY_VER_RAW="$(trivy --version 2>/dev/null || true)"
+# Expect "Version: 0.61.1"
+TRIVY_VER="$(awk -F': ' '/Version:/{print $2}' <<<"$TRIVY_VER_RAW" | tr -d '\r')"
+TRIVY_MAJOR="$(cut -d. -f1 <<<"${TRIVY_VER#v}")"
+TRIVY_MINOR="$(cut -d. -f2 <<<"${TRIVY_VER#v}")"
+TRIVY_PATCH="$(cut -d. -f3 <<<"${TRIVY_VER#v}")"
+# Flag: supports 'trivy sbom --input' (>= 0.62.0)
+supports_sbom_input=false
+if [[ -n "$TRIVY_VER" ]]; then
+  if (( TRIVY_MAJOR > 0 )) || (( TRIVY_MAJOR == 0 && TRIVY_MINOR >= 62 )); then
+    supports_sbom_input=true
+  fi
+fi
+echo "[*] Trivy detected: ${TRIVY_VER:-unknown} (sbom --input supported: $supports_sbom_input)"
+
 timestamp="$(date +%Y%m%d-%H%M%S)"
 WORKDIR="$(pwd)"
 REPORT_DIR="${WORKDIR}/trivy-reports-${timestamp}"
@@ -72,10 +88,9 @@ TRIVY_FLAGS_COMMON=(
 [[ -n "$TRIVY_SCANNERS"  ]] && TRIVY_FLAGS_COMMON+=( --scanners "$TRIVY_SCANNERS" )
 
 TRIVY_FLAGS_BY_NAME=("${TRIVY_FLAGS_COMMON[@]}" --image-src podman)
-TRIVY_FLAGS_BY_ARCHIVE=("${TRIVY_FLAGS_COMMON[@]}")  # --image-src not needed with --input
+TRIVY_FLAGS_BY_ARCHIVE=("${TRIVY_FLAGS_COMMON[@]}")  # --image-src not needed with --input/--file
 
-# SBOM flags
-# Trivy v0.61.1 supports: `trivy sbom` with --format cyclonedx or spdx-json
+# SBOM flags (minimal; avoid severity/scanner noise)
 SBOM_FLAGS_COMMON=(
   --skip-db-update
   --offline-scan
@@ -83,6 +98,9 @@ SBOM_FLAGS_COMMON=(
   --timeout "$TRIVY_TIMEOUT"
   --format "$SBOM_FORMAT"
 )
+# For older Trivy (0.61.1), SBOM via `trivy image --format cyclonedx|spdx-json`
+SBOM_IMAGE_BY_NAME=("${SBOM_FLAGS_COMMON[@]}" --image-src podman)
+SBOM_IMAGE_BY_ARCHIVE=("${SBOM_FLAGS_COMMON[@]}")  # + (--input or --file) decided below
 
 # --- Socket detection (if not forcing archive) ---
 : "${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
@@ -109,7 +127,7 @@ else
 fi
 
 if [[ "$ONLY_TAGGED" == "true" && ${#IMAGE_NAMES[@]} -eq 0 ]]; then
-  echo "No tagged images found. Tag images (e.g., 'podman tag <ID> localhost/myimg:v1') or set ONLY_TAGGED=false."
+  echo "No tagged images found. Tag images or set ONLY_TAGGED=false."
   exit 0
 fi
 
@@ -150,18 +168,30 @@ scan_vuln_by_archive_ref() {
   echo "  - [SAVE] ${ref} → ${tar}"
   run_with_timeout "$SAVE_TIMEOUT" podman save -o "$tar" "$ref"
   echo "    [SCAN] ${ref} (archive)"
-  run_with_timeout "$EXTERNAL_TIMEOUT" trivy image "${TRIVY_FLAGS_BY_ARCHIVE[@]}" --input "$tar" -o "$out"
+  # In 0.61.1, `trivy image --input` works; fall back to --file if --input is not supported
+  if trivy image --help 2>/dev/null | grep -q -- '--input'; then
+    run_with_timeout "$EXTERNAL_TIMEOUT" trivy image "${TRIVY_FLAGS_BY_ARCHIVE[@]}" --input "$tar" -o "$out"
+  else
+    # Older behavior: --file is less ideal but available
+    run_with_timeout "$EXTERNAL_TIMEOUT" trivy image "${TRIVY_FLAGS_BY_ARCHIVE[@]}" --file "$tar" -o "$out"
+  fi
   echo "    [CLEAN] ${tar}"
   rm -f "$tar"
 }
 
+# SBOM creation (version-aware)
 sbom_by_name() {
   local name="$1" safe out
   [[ "$GENERATE_SBOM" == "true" ]] || return 0
   safe="$(sanitize "$name")"
   out="$SBOM_DIR/${safe}.json"
-  echo "    [SBOM] ${name} (API, $SBOM_FORMAT)"
-  run_with_timeout "$EXTERNAL_TIMEOUT" trivy sbom "${SBOM_FLAGS_COMMON[@]}" --image-src podman -o "$out" "$name"
+  if $supports_sbom_input; then
+    echo "    [SBOM] ${name} (API, $SBOM_FORMAT via 'trivy sbom')"
+    run_with_timeout "$EXTERNAL_TIMEOUT" trivy sbom "${SBOM_FLAGS_COMMON[@]}" --image-src podman -o "$out" "$name"
+  else
+    echo "    [SBOM] ${name} (API, $SBOM_FORMAT via 'trivy image')"
+    run_with_timeout "$EXTERNAL_TIMEOUT" trivy image "${SBOM_IMAGE_BY_NAME[@]}" -o "$out" "$name"
+  fi
 }
 
 sbom_by_archive_ref() {
@@ -172,8 +202,17 @@ sbom_by_archive_ref() {
   out="$SBOM_DIR/${safe}.json"
   echo "  - [SAVE] ${ref} → ${tar} (for SBOM)"
   run_with_timeout "$SAVE_TIMEOUT" podman save -o "$tar" "$ref"
-  echo "    [SBOM] ${ref} (archive, $SBOM_FORMAT)"
-  run_with_timeout "$EXTERNAL_TIMEOUT" trivy sbom "${SBOM_FLAGS_COMMON[@]}" --input "$tar" -o "$out"
+  if $supports_sbom_input; then
+    echo "    [SBOM] ${ref} (archive, $SBOM_FORMAT via 'trivy sbom --input')"
+    run_with_timeout "$EXTERNAL_TIMEOUT" trivy sbom "${SBOM_FLAGS_COMMON[@]}" --input "$tar" -o "$out"
+  else
+    echo "    [SBOM] ${ref} (archive, $SBOM_FORMAT via 'trivy image --format ...')"
+    if trivy image --help 2>/dev/null | grep -q -- '--input'; then
+      run_with_timeout "$EXTERNAL_TIMEOUT" trivy image "${SBOM_IMAGE_BY_ARCHIVE[@]}" --input "$tar" -o "$out"
+    else
+      run_with_timeout "$EXTERNAL_TIMEOUT" trivy image "${SBOM_IMAGE_BY_ARCHIVE[@]}" --file "$tar" -o "$out"
+    fi
+  fi
   echo "    [CLEAN] ${tar}"
   rm -f "$tar"
 }
@@ -182,16 +221,14 @@ sbom_by_archive_ref() {
 if [[ "$ONLY_TAGGED" == "true" ]]; then
   for NAME in "${IMAGE_NAMES[@]}"; do
     if [[ "$USE_ARCHIVE_FALLBACK" == "true" ]]; then
-      # archive flow (single save per operation)
       { scan_vuln_by_archive_ref "$NAME" || echo "    ! Scan failed for $NAME"; }
       { sbom_by_archive_ref "$NAME" || echo "    ! SBOM failed for $NAME"; }
-    } else
+    else
       { scan_vuln_by_name "$NAME" || echo "    ! Scan failed for $NAME"; }
       { sbom_by_name "$NAME" || echo "    ! SBOM failed for $NAME"; }
     fi
   done
 else
-  # include <none>:<none> IDs
   while IFS= read -r LINE; do
     NAME="$(awk '{print $1}' <<<"$LINE")"
     ID="$(awk '{print $2}' <<<"$LINE")"

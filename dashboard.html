@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>Trivy Reports: Weekly Dashboard + Vulnerabilities Viewer</title>
+<title>Trivy Reports: Weekly Dashboard + Vulnerabilities & SBOM Viewer</title>
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <style>
 :root{--fg:#111;--muted:#666;--line:#e7e7e7;--bg:#fff}
@@ -26,7 +26,7 @@ hr{border:none;border-top:2px solid var(--line);margin:28px 0}
 </head>
 <body>
   <h1>Trivy Reports</h1>
-  <p class="muted">Pick your <code>reports/&lt;host&gt;/</code> folder (reads all <code>trivy-reports-YYYYmmdd-HHMMSS/*.json</code>) or drop JSON files/folders. Both sections below update together.</p>
+  <p class="muted">Pick your <code>reports/&lt;host&gt;/</code> folder (reads all <code>trivy-reports-YYYYmmdd-HHMMSS/*.json</code> and optional <code>sboms-YYYYmmdd-HHMMSS/*.json</code>) or drop JSON files/folders. Both sections below update together.</p>
 
   <div class="actions">
     <button class="btn" id="pickdirBtn">📁 Pick reports folder</button>
@@ -100,6 +100,26 @@ hr{border:none;border-top:2px solid var(--line);margin:28px 0}
     </table>
   </div>
 
+  <hr>
+
+  <!-- SECTION 3: SBOM INVENTORY -->
+  <h2>SBOM Inventory</h2>
+  <div class="card controls">
+    <input id="sbom-q" type="search" placeholder="Search (image, package, version, license, purl) …">
+    <button class="btn" id="dl-sbom" disabled>📥 sbom_inventory.csv</button>
+  </div>
+
+  <div class="card">
+    <table id="sbom-grid">
+      <thead>
+        <tr>
+          <th>Image</th><th>Package</th><th>Version</th><th>PURL</th><th>Licenses</th>
+        </tr>
+      </thead>
+      <tbody id="sbom-tbody"></tbody>
+    </table>
+  </div>
+
 <script>
 /* ===== shared helpers & state ===== */
 const sevOrder = ["CRITICAL","HIGH","MEDIUM","LOW","UNKNOWN"];
@@ -111,6 +131,9 @@ let LATEST = null;    // {date, items:[...]}
 let PER_IMAGE = [];   // latest week per-image rows
 let VUL_ROWS = [];    // all vulnerabilities rows across all loaded files
 let CURRENT_ROWS = []; // filtered for viewer
+
+// SBOM store
+let SBOM_ROWS = [];   // [{Image, Name, Version, PURL, Licenses}]
 
 /* ===== folder / file picking + DnD ===== */
 const drop = document.getElementById('drop');
@@ -159,12 +182,20 @@ async function handleFiles(fileList){
 function readJSONwithPath(file){
   return new Promise((res, rej)=>{
     const r = new FileReader();
-    r.onload = () => { try { res({file, name:file.name, path:file.webkitRelativePath||file.name, json: JSON.parse(r.result)}); } catch(e){ rej(e); } };
+    r.onload = () => {
+      try {
+        const json = JSON.parse(r.result);
+        const item = {file, name:file.name, path:file.webkitRelativePath||file.name, json};
+        // Try to harvest SBOM rows (CycloneDX/SPDX) as we load
+        addSbomRows(item.path, json);
+        res(item);
+      } catch(e){ rej(e); }
+    };
     r.onerror = rej; r.readAsText(file);
   });
 }
 
-/* ===== data transforms ===== */
+/* ===== data transforms for VULNs ===== */
 function extractWeekFromPath(p){
   const m = p.match(/trivy-reports-(\d{8})-(\d{6})/);
   if (!m) return null;
@@ -215,6 +246,38 @@ function rowsFromJson(j, image){
   return out;
 }
 
+/* ===== SBOM parsing ===== */
+function parseCycloneDX(json, image){
+  const comps = json?.components || [];
+  return comps.map(c => ({
+    Image: image,
+    Name: c.name || '',
+    Version: c.version || '',
+    PURL: c.purl || '',
+    Licenses: (c.licenses||[]).map(l => l.license?.id || l.license?.name || '').filter(Boolean).join(' | ')
+  }));
+}
+function parseSPDX(json, image){
+  const pkgs = json?.packages || [];
+  return pkgs.map(p => ({
+    Image: image,
+    Name: p.name || '',
+    Version: p.versionInfo || '',
+    PURL: (p.externalRefs||[]).find(r=>r.referenceType==='purl')?.referenceLocator || '',
+    Licenses: p.licenseDeclared || p.licenseConcluded || ''
+  }));
+}
+function addSbomRows(filePath, json){
+  const img = filePath.split('/').pop().replace(/\.json$/,'');
+  if (json && typeof json === 'object') {
+    if (typeof json.bomFormat === 'string' && json.bomFormat.toLowerCase() === 'cyclonedx') {
+      SBOM_ROWS.push(...parseCycloneDX(json, img));
+    } else if (json.spdxVersion) {
+      SBOM_ROWS.push(...parseSPDX(json, img));
+    }
+  }
+}
+
 /* ===== charts (no libs) ===== */
 function drawLineChart(canvas, labels, series){
   const ctx = canvas.getContext("2d");
@@ -226,7 +289,6 @@ function drawLineChart(canvas, labels, series){
   const innerW = canvas.clientWidth - m.l - m.r;
   const innerH = canvas.clientHeight - m.t - m.b;
   const maxY = Math.max(1, ...series.flatMap(s=>s.values));
-  // axes
   ctx.strokeStyle="#ccc"; ctx.lineWidth=1;
   ctx.beginPath(); ctx.moveTo(m.l, m.t); ctx.lineTo(m.l, m.t+innerH); ctx.lineTo(m.l+innerW, m.t+innerH); ctx.stroke();
   ctx.fillStyle="#666"; ctx.font="12px system-ui";
@@ -241,7 +303,6 @@ function drawLineChart(canvas, labels, series){
     ctx.fillStyle="#666"; ctx.textAlign="center";
     ctx.fillText(lb.slice(5), x, m.t+innerH+16);
   });
-  // lines + point markers so a single week shows
   series.forEach(s=>{
     ctx.strokeStyle=s.color; ctx.lineWidth=2; ctx.beginPath();
     s.values.forEach((v,i)=>{
@@ -268,7 +329,6 @@ function drawStackedBarChart(canvas, labels, series){
   const innerH = canvas.clientHeight - m.t - m.b;
   const totals = labels.map((_,i)=>series.reduce((s,ser)=>s+(ser.values[i]||0),0));
   const maxY = Math.max(1, ...totals);
-  // axes
   ctx.strokeStyle="#ccc"; ctx.lineWidth=1;
   ctx.beginPath(); ctx.moveTo(m.l,m.t); ctx.lineTo(m.l,m.t+innerH); ctx.lineTo(m.l+innerW,m.t+innerH); ctx.stroke();
   ctx.fillStyle="#666"; ctx.font="12px system-ui";
@@ -334,19 +394,21 @@ function buildDataAndRender(){
     PER_IMAGE.map(r=>({image:r.image, CRITICAL:r.CRITICAL,HIGH:r.HIGH,MEDIUM:r.MEDIUM,LOW:r.LOW,UNKNOWN:r.UNKNOWN,total:r.total})));
 
   // render vulnerabilities viewer (filtered)
-  setupViewerOnce(); // attach handlers if not yet
+  setupViewerOnce();
   renderViewer();
+
+  // SBOM viewer
+  wireSbomOnce();
+  renderSbomTable();
 }
 
 function renderWeekly(){
-  // trend
   const labels = WEEKLY_AGG.map(w=>w.date);
   const series = sevOrder.map(k=>({name:k, color:sevColor[k], values:WEEKLY_AGG.map(w=>w.counts[k]||0)}));
   drawLineChart(document.getElementById('trend'), labels, series);
   document.getElementById('trend-note').textContent =
     WEEKS.length ? `Weeks: ${labels[0]} → ${labels[labels.length-1]}  •  Folders: ${WEEKS.length}` : 'No data';
 
-  // stacked bars for latest
   const barLabels = PER_IMAGE.map(r=>r.image);
   const barSeries = [
     {name:'CRITICAL', color:sevColor.CRITICAL, values: PER_IMAGE.map(r=>r.CRITICAL)},
@@ -359,7 +421,6 @@ function renderWeekly(){
   document.getElementById('bars-note').textContent =
     LATEST ? `Latest week: ${LATEST.date} • ${PER_IMAGE.length} images (stacked by severity)` : 'No latest week found';
 
-  // latest table
   const tbody = document.getElementById('latest-tbody');
   tbody.innerHTML = PER_IMAGE.map(r=>`
     <tr>
@@ -400,17 +461,13 @@ function renderViewer(){
     return hay.includes(q);
   });
 
-  // counts
   const counts = {CRITICAL:0,HIGH:0,MEDIUM:0,LOW:0,UNKNOWN:0};
   CURRENT_ROWS.forEach(r=>counts[r.Severity]=(counts[r.Severity]||0)+1);
   document.getElementById('counts').textContent =
     `Showing ${CURRENT_ROWS.length} • ` +
     `CRITICAL ${counts.CRITICAL||0} • HIGH ${counts.HIGH||0} • MEDIUM ${counts.MEDIUM||0} • LOW ${counts.LOW||0} • UNK ${counts.UNKNOWN||0}`;
-
-  // enable CSV button
   document.getElementById('dl-vuls').disabled = CURRENT_ROWS.length===0;
 
-  // sort
   const sevRank = s => ({CRITICAL:0,HIGH:1,MEDIUM:2,LOW:3,UNKNOWN:4})[s] ?? 5;
   const dir = sortDir==='asc'?1:-1;
   CURRENT_ROWS.sort((a,b)=>{
@@ -419,7 +476,6 @@ function renderViewer(){
     return va.localeCompare(vb, undefined, {numeric:true})*dir;
   });
 
-  // draw
   const tbody = document.querySelector('#grid tbody');
   tbody.innerHTML = CURRENT_ROWS.map(r=>`
     <tr>
@@ -430,6 +486,33 @@ function renderViewer(){
       <td>${r.Fixed ? `<strong>${escapeHtml(r.Fixed)}</strong>` : '<span class="muted">n/a</span>'}</td>
       <td>${escapeHtml(r.CVE)}</td>
       <td>${r.URL ? `<a href="${escapeHtml(r.URL)}" target="_blank" rel="noreferrer">${escapeHtml(r.Title || r.URL)}</a>` : escapeHtml(r.Title)}</td>
+    </tr>
+  `).join('');
+}
+
+/* ===== SBOM viewer ===== */
+function wireSbomOnce(){
+  const q = document.getElementById('sbom-q');
+  if (q && !q._wired){ q._wired = true; q.oninput = renderSbomTable; }
+  const btn = document.getElementById('dl-sbom');
+  if (btn && !btn._wired){
+    btn._wired = true;
+    btn.onclick = ()=> downloadCSV('sbom_inventory.csv', SBOM_ROWS);
+  }
+}
+function renderSbomTable(){
+  const tbody = document.getElementById('sbom-tbody');
+  if (!tbody) return;
+  const q = (document.getElementById('sbom-q').value||'').toLowerCase();
+  const rows = SBOM_ROWS.filter(r => `${r.Image} ${r.Name} ${r.Version} ${r.PURL} ${r.Licenses}`.toLowerCase().includes(q));
+  document.getElementById('dl-sbom').disabled = rows.length===0;
+  tbody.innerHTML = rows.map(r => `
+    <tr>
+      <td>${escapeHtml(r.Image)}</td>
+      <td>${escapeHtml(r.Name)}</td>
+      <td>${escapeHtml(r.Version)}</td>
+      <td>${escapeHtml(r.PURL)}</td>
+      <td>${escapeHtml(r.Licenses)}</td>
     </tr>
   `).join('');
 }
@@ -447,4 +530,3 @@ function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;',
 </script>
 </body>
 </html>
-
