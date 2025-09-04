@@ -2,31 +2,39 @@
 set -euo pipefail
 
 # ============================================
-# Offline Trivy Bulk Scanner (Podman) with archive fallback + timeouts
+# Offline Trivy Bulk Scanner (Podman) + SBOMs
 # ============================================
 # Requires: podman, trivy, (optional) coreutils 'timeout'
 # Assumes: ~/.cache/trivy/db/{trivy.db,metadata.json} already present
-# Output:  ./trivy-reports-YYYYmmdd-HHMMSS/*.json
+# Output:
+#   ./trivy-reports-YYYYmmdd-HHMMSS/*.json   (vuln scan results)
+#   ./sboms-YYYYmmdd-HHMMSS/*.json           (SBOMs per image)
 #
 # Env you can override:
-#   SEVERITY="HIGH,CRITICAL"          # e.g. "LOW,MEDIUM,HIGH,CRITICAL"
+#   SEVERITY=""                      # default empty => include ALL severities
 #   CACHE_DIR="$HOME/.cache/trivy"
-#   ONLY_TAGGED="true"                # skip <none>:<none>
-#   TRIVY_PKG_TYPES="os"              # e.g. "os,library" (default empty = Trivy default)
-#   TRIVY_SCANNERS="vuln"             # e.g. "vuln,secret,config" (default empty = Trivy default)
-#   FORCE_ARCHIVE="true"              # **default true** -> use podman save + trivy --input
-#   SAVE_TIMEOUT="120s"               # timeout for 'podman save' each image
-#   TRIVY_TIMEOUT="10m"               # Trivy's internal --timeout (per image)
-#   EXTERNAL_TIMEOUT=""               # optional outer 'timeout' wrapper per scan, e.g. "12m"
+#   ONLY_TAGGED="true"               # skip <none>:<none>
+#   TRIVY_PKG_TYPES="os,library"     # scan both OS & app deps by default
+#   TRIVY_SCANNERS="vuln"            # add "secret,config" if desired
+#   FORCE_ARCHIVE="true"             # default: reliable archive mode
+#   SAVE_TIMEOUT="120s"              # timeout for 'podman save'
+#   TRIVY_TIMEOUT="10m"              # Trivy's internal timeout per image
+#   EXTERNAL_TIMEOUT=""              # outer timeout per scan, e.g. "12m"
+#   GENERATE_SBOM="true"             # generate SBOMs per image
+#   SBOM_FORMAT="cyclonedx"          # "cyclonedx" or "spdx-json"
 # ============================================
 
-SEVERITY="${SEVERITY:-}"
+SEVERITY="${SEVERITY:-}"   # empty => include all
 CACHE_DIR="${CACHE_DIR:-$HOME/.cache/trivy}"
 ONLY_TAGGED="${ONLY_TAGGED:-true}"
-FORCE_ARCHIVE="${FORCE_ARCHIVE:-true}"     # default to archive mode for reliability
+TRIVY_PKG_TYPES="${TRIVY_PKG_TYPES:-os,library}"
+TRIVY_SCANNERS="${TRIVY_SCANNERS:-vuln}"
+FORCE_ARCHIVE="${FORCE_ARCHIVE:-true}"
 SAVE_TIMEOUT="${SAVE_TIMEOUT:-120s}"
 TRIVY_TIMEOUT="${TRIVY_TIMEOUT:-10m}"
-EXTERNAL_TIMEOUT="${EXTERNAL_TIMEOUT:-}"   # empty = no outer wrapper
+EXTERNAL_TIMEOUT="${EXTERNAL_TIMEOUT:-}"
+GENERATE_SBOM="${GENERATE_SBOM:-true}"
+SBOM_FORMAT="${SBOM_FORMAT:-cyclonedx}"   # or "spdx-json"
 
 # --- sanity checks ---
 command -v podman >/dev/null || { echo "podman not found"; exit 1; }
@@ -48,9 +56,10 @@ fi
 timestamp="$(date +%Y%m%d-%H%M%S)"
 WORKDIR="$(pwd)"
 REPORT_DIR="${WORKDIR}/trivy-reports-${timestamp}"
-mkdir -p "$REPORT_DIR"
+SBOM_DIR="${WORKDIR}/sboms-${timestamp}"
+mkdir -p "$REPORT_DIR" "$SBOM_DIR"
 
-# Common Trivy flags
+# Common Trivy flags for vulnerability scanning
 TRIVY_FLAGS_COMMON=(
   --skip-db-update
   --offline-scan
@@ -58,14 +67,22 @@ TRIVY_FLAGS_COMMON=(
   --format json
   --timeout "$TRIVY_TIMEOUT"
 )
-# Optional tuning from env 
 [[ -n "$SEVERITY"        ]] && TRIVY_FLAGS_COMMON+=( --severity "$SEVERITY" )
-[[ -n "${TRIVY_PKG_TYPES:-}" ]] && TRIVY_FLAGS_COMMON+=( --pkg-types "$TRIVY_PKG_TYPES" )
-[[ -n "${TRIVY_SCANNERS:-}"  ]] && TRIVY_FLAGS_COMMON+=( --scanners "$TRIVY_SCANNERS" )
+[[ -n "$TRIVY_PKG_TYPES" ]] && TRIVY_FLAGS_COMMON+=( --pkg-types "$TRIVY_PKG_TYPES" )
+[[ -n "$TRIVY_SCANNERS"  ]] && TRIVY_FLAGS_COMMON+=( --scanners "$TRIVY_SCANNERS" )
 
-# Two modes:
 TRIVY_FLAGS_BY_NAME=("${TRIVY_FLAGS_COMMON[@]}" --image-src podman)
-TRIVY_FLAGS_BY_ARCHIVE=("${TRIVY_FLAGS_COMMON[@]}")  # --image-src not needed for --input
+TRIVY_FLAGS_BY_ARCHIVE=("${TRIVY_FLAGS_COMMON[@]}")  # --image-src not needed with --input
+
+# SBOM flags
+# Trivy v0.61.1 supports: `trivy sbom` with --format cyclonedx or spdx-json
+SBOM_FLAGS_COMMON=(
+  --skip-db-update
+  --offline-scan
+  --cache-dir "$CACHE_DIR"
+  --timeout "$TRIVY_TIMEOUT"
+  --format "$SBOM_FORMAT"
+)
 
 # --- Socket detection (if not forcing archive) ---
 : "${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
@@ -80,7 +97,7 @@ if [[ "$FORCE_ARCHIVE" != "true" ]]; then
   fi
 fi
 
-# --- Image discovery (works without socket) ---
+# --- Image discovery ---
 echo "[*] Listing local Podman images..."
 if [[ "$ONLY_TAGGED" == "true" ]]; then
   mapfile -t IMAGE_NAMES < <(
@@ -99,16 +116,11 @@ fi
 sanitize() { echo "$1" | tr '/:@' '_' ; }
 
 echo "[*] Found ${#IMAGE_NAMES[@]} images."
-if [[ "$USE_ARCHIVE_FALLBACK" == "true" ]]; then
-  echo "[*] Using ARCHIVE mode (podman save → trivy --input)."
-else
-  echo "[*] Using API mode (scan by image name via Podman socket)."
-fi
+echo "[*] Mode: $([[ "$USE_ARCHIVE_FALLBACK" == "true" ]] && echo ARCHIVE || echo API)"
 
 # --- helpers for timeouts ---
 run_with_timeout() {
-  # $1: timeout_duration (may be empty), remaining args: command...
-  local dur="$1"; shift || true
+  local dur="${1:-}"; shift || true
   if [[ -n "$dur" && $HAVE_TIMEOUT -eq 1 ]]; then
     timeout --preserve-status "$dur" "$@"
   else
@@ -121,57 +133,48 @@ TMPDIR="$(mktemp -d -t trivy-archive-XXXXXX)"
 cleanup() { rm -rf "$TMPDIR"; }
 trap cleanup EXIT
 
-# --- Scan functions ---
-scan_by_name() {
+# --- Scan & SBOM functions ---
+scan_vuln_by_name() {
   local name="$1" safe out
   safe="$(sanitize "$name")"
   out="$REPORT_DIR/${safe}.json"
-  echo "  - Scanning ${name} (API) ..."
-  if ! run_with_timeout "$EXTERNAL_TIMEOUT" trivy image "${TRIVY_FLAGS_BY_NAME[@]}" -o "$out" "$name"; then
-    echo "    ! Scan timed out/failed for $name (continuing)"
-    return 1
-  fi
+  echo "  - [SCAN] ${name} (API)"
+  run_with_timeout "$EXTERNAL_TIMEOUT" trivy image "${TRIVY_FLAGS_BY_NAME[@]}" -o "$out" "$name"
 }
 
-scan_by_archive_name() {
-  local name="$1" safe tar out
-  safe="$(sanitize "$name")"
+scan_vuln_by_archive_ref() {
+  local ref="$1" safe tar out
+  safe="$(sanitize "$ref")"
   tar="$TMPDIR/${safe}.tar"
   out="$REPORT_DIR/${safe}.json"
-  echo "  - Saving ${name} → ${tar}"
-  if ! run_with_timeout "$SAVE_TIMEOUT" podman save -o "$tar" "$name"; then
-    echo "    ! podman save timed out/failed for $name (skipping)"
-    return 1
-  fi
-  echo "    Scanning ${name} (archive) ..."
-  if ! run_with_timeout "$EXTERNAL_TIMEOUT" trivy image "${TRIVY_FLAGS_BY_ARCHIVE[@]}" --input "$tar" -o "$out"; then
-    echo "    ! Scan timed out/failed for $name (continuing)"
-    rm -f "$tar"
-    return 1
-  fi
+  echo "  - [SAVE] ${ref} → ${tar}"
+  run_with_timeout "$SAVE_TIMEOUT" podman save -o "$tar" "$ref"
+  echo "    [SCAN] ${ref} (archive)"
+  run_with_timeout "$EXTERNAL_TIMEOUT" trivy image "${TRIVY_FLAGS_BY_ARCHIVE[@]}" --input "$tar" -o "$out"
+  echo "    [CLEAN] ${tar}"
   rm -f "$tar"
 }
 
-scan_by_archive_id_or_name() {
-  local nm="$1" id="$2" ref safe tar out
-  if [[ "$nm" == "<none>:<none>" || -z "$nm" ]]; then
-    ref="$id"; safe="$(sanitize "$id")"
-  else
-    ref="$nm"; safe="$(sanitize "$nm")"
-  fi
+sbom_by_name() {
+  local name="$1" safe out
+  [[ "$GENERATE_SBOM" == "true" ]] || return 0
+  safe="$(sanitize "$name")"
+  out="$SBOM_DIR/${safe}.json"
+  echo "    [SBOM] ${name} (API, $SBOM_FORMAT)"
+  run_with_timeout "$EXTERNAL_TIMEOUT" trivy sbom "${SBOM_FLAGS_COMMON[@]}" --image-src podman -o "$out" "$name"
+}
+
+sbom_by_archive_ref() {
+  local ref="$1" safe tar out
+  [[ "$GENERATE_SBOM" == "true" ]] || return 0
+  safe="$(sanitize "$ref")"
   tar="$TMPDIR/${safe}.tar"
-  out="$REPORT_DIR/${safe}.json"
-  echo "  - Saving ${ref} → ${tar}"
-  if ! run_with_timeout "$SAVE_TIMEOUT" podman save -o "$tar" "$ref"; then
-    echo "    ! podman save timed out/failed for $ref (skipping)"
-    return 1
-  fi
-  echo "    Scanning ${ref} (archive) ..."
-  if ! run_with_timeout "$EXTERNAL_TIMEOUT" trivy image "${TRIVY_FLAGS_BY_ARCHIVE[@]}" --input "$tar" -o "$out"; then
-    echo "    ! Scan timed out/failed for $ref (continuing)"
-    rm -f "$tar"
-    return 1
-  fi
+  out="$SBOM_DIR/${safe}.json"
+  echo "  - [SAVE] ${ref} → ${tar} (for SBOM)"
+  run_with_timeout "$SAVE_TIMEOUT" podman save -o "$tar" "$ref"
+  echo "    [SBOM] ${ref} (archive, $SBOM_FORMAT)"
+  run_with_timeout "$EXTERNAL_TIMEOUT" trivy sbom "${SBOM_FLAGS_COMMON[@]}" --input "$tar" -o "$out"
+  echo "    [CLEAN] ${tar}"
   rm -f "$tar"
 }
 
@@ -179,27 +182,30 @@ scan_by_archive_id_or_name() {
 if [[ "$ONLY_TAGGED" == "true" ]]; then
   for NAME in "${IMAGE_NAMES[@]}"; do
     if [[ "$USE_ARCHIVE_FALLBACK" == "true" ]]; then
-      scan_by_archive_name "$NAME" || true
-    else
-      scan_by_name "$NAME" || true
+      # archive flow (single save per operation)
+      { scan_vuln_by_archive_ref "$NAME" || echo "    ! Scan failed for $NAME"; }
+      { sbom_by_archive_ref "$NAME" || echo "    ! SBOM failed for $NAME"; }
+    } else
+      { scan_vuln_by_name "$NAME" || echo "    ! Scan failed for $NAME"; }
+      { sbom_by_name "$NAME" || echo "    ! SBOM failed for $NAME"; }
     fi
   done
 else
+  # include <none>:<none> IDs
   while IFS= read -r LINE; do
     NAME="$(awk '{print $1}' <<<"$LINE")"
     ID="$(awk '{print $2}' <<<"$LINE")"
+    REF="$([[ "$NAME" == "<none>:<none>" || -z "$NAME" ]] && echo "$ID" || echo "$NAME")"
     if [[ "$USE_ARCHIVE_FALLBACK" == "true" ]]; then
-      scan_by_archive_id_or_name "$NAME" "$ID" || true
+      { scan_vuln_by_archive_ref "$REF" || echo "    ! Scan failed for $REF"; }
+      { sbom_by_archive_ref "$REF" || echo "    ! SBOM failed for $REF"; }
     else
-      # prefer name if available, else ID
-      if [[ "$NAME" == "<none>:<none>" || -z "$NAME" ]]; then
-        scan_by_name "$ID" || true
-      else
-        scan_by_name "$NAME" || true
-      fi
+      { scan_vuln_by_name "$REF" || echo "    ! Scan failed for $REF"; }
+      { sbom_by_name "$REF" || echo "    ! SBOM failed for $REF"; }
     fi
   done <<<"$(printf '%s\n' "${IMAGE_NAMES[@]}")"
 fi
 
-echo "[*] Done. Reports saved to: $REPORT_DIR"
-echo "[*] Example: jq '.Results[] | {Target, Vulnerabilities}' '$REPORT_DIR/some-image.json' | less"
+echo "[*] Done."
+echo "[*] Vulnerability reports: $REPORT_DIR"
+echo "[*] SBOMs:                 $SBOM_DIR"
