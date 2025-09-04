@@ -102,4 +102,4 @@ Future options: integrate into CI/CD or centralize reports for multi-host aggreg
 This gives us a repeatable, air-gap-friendly vulnerability management pipeline. Please start using the workflow on your projects and share any issues or improvement suggestions.
 
 Thanks,
-[Your Name]
+[Your Name]cd
