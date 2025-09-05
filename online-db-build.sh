@@ -229,16 +229,10 @@ rm -rf "$BUNDLE_DIR"; mkdir -p "$BUNDLE_DIR/db"
 cp "$DB_FINAL"   "$BUNDLE_DIR/db/trivy.db"
 cp "$META_FINAL" "$BUNDLE_DIR/db/metadata.json"
 
-# Add java-db too if present
-if [[ -d "$JAVA_FINAL" ]]; then
-  cp -r "$JAVA_FINAL" "$BUNDLE_DIR/java-db"
-fi
-
 cd "$BUNDLE_DIR"
 
 # Only YYYYmmdd in filename
 STAMP="$(date +%Y%m%d)"
-tar -czf "../../trivy-offline-db-${STAMP}.tgz" db java-db 2>/dev/null || \
 tar -czf "../../trivy-offline-db-${STAMP}.tgz" db
 
 cd - >/dev/null
