@@ -21,12 +21,13 @@ canvas{width:100%;height:280px;border:1px solid var(--line);border-radius:10px;b
 small.code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:#f7f7f7;padding:2px 6px;border-radius:6px}
 .controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 .chk{display:inline-flex;gap:6px;align-items:center;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:#f7f7f7}
+.notice{margin:.5rem 0;color:#555}
 hr{border:none;border-top:2px solid var(--line);margin:28px 0}
 </style>
 </head>
 <body>
   <h1>Trivy Reports</h1>
-  <p class="muted">Pick your <code>reports/&lt;host&gt;/</code> folder (reads all <code>trivy-reports-YYYYmmdd-HHMMSS/*.json</code> and optional <code>sboms-YYYYmmdd-HHMMSS/*.json</code>) or drop JSON files/folders. Both sections below update together.</p>
+  <p class="muted">Pick your <code>reports/&lt;host&gt;/</code> folder (reads all <code>trivy-reports-YYYYmmdd-HHMMSS/*.json</code> and optional <code>sboms-YYYYmmdd-HHMMSS/*.json</code>) or drop JSON files/folders. The weekly widgets always use the newest folder (“latest week”).</p>
 
   <div class="actions">
     <button class="btn" id="pickdirBtn">📁 Pick reports folder</button>
@@ -57,6 +58,7 @@ hr{border:none;border-top:2px solid var(--line);margin:28px 0}
 
   <div class="card">
     <h3>Latest week — details</h3>
+    <div class="muted" id="latest-week-label"></div>
     <table>
       <thead>
         <tr>
@@ -72,6 +74,7 @@ hr{border:none;border-top:2px solid var(--line);margin:28px 0}
 
   <!-- SECTION 2: VULNERABILITIES VIEWER -->
   <h2>Trivy Vulnerabilities Viewer</h2>
+  <div class="notice" id="scope-note"></div>
   <div class="card controls">
     <label class="chk"><input type="checkbox" class="sev" value="CRITICAL" checked> <span class="badge CRITICAL">CRITICAL</span></label>
     <label class="chk"><input type="checkbox" class="sev" value="HIGH" checked> <span class="badge HIGH">HIGH</span></label>
@@ -79,6 +82,7 @@ hr{border:none;border-top:2px solid var(--line);margin:28px 0}
     <label class="chk"><input type="checkbox" class="sev" value="LOW" checked> <span class="badge LOW">LOW</span></label>
     <label class="chk"><input type="checkbox" class="sev" value="UNKNOWN"> <span class="badge UNKNOWN">UNK</span></label>
     <label class="chk"><input type="checkbox" id="fixonly"> Fix available only</label>
+    <label class="chk"><input type="checkbox" id="allweeks"> Show all weeks (aggregate)</label>
     <input id="q" type="search" placeholder="Search (CVE, package, image, title) …">
     <span id="counts" class="muted"></span>
   </div>
@@ -90,8 +94,8 @@ hr{border:none;border-top:2px solid var(--line);margin:28px 0}
           <th data-k="Severity">Severity</th>
           <th data-k="Images">Images</th>
           <th data-k="Pkg">Package</th>
-          <th data-k="InstalledVersion">Installed Version</th>
-          <th data-k="FixedVersion">Fixed Version</th>
+          <th data-k="Installed">Installed Version</th>
+          <th data-k="Fixed">Fixed Version</th>
           <th data-k="CVE">CVE</th>
           <th data-k="Title">Advisory / Title</th>
         </tr>
@@ -129,8 +133,8 @@ let WEEKS = [];       // [{date, items:[{file,path,json}]}]
 let WEEKLY_AGG = [];  // [{date, counts}]
 let LATEST = null;    // {date, items:[...]}
 let PER_IMAGE = [];   // latest week per-image rows
-let VUL_ROWS = [];    // all vulnerabilities rows across all loaded files
-let CURRENT_ROWS = []; // filtered for viewer
+let VUL_ROWS = [];    // rows used by the viewer (changes with toggle)
+let CURRENT_ROWS = []; // filtered rows
 
 // SBOM store
 let SBOM_ROWS = [];   // [{Image, Name, Version, PURL, Licenses}]
@@ -143,11 +147,10 @@ drop.addEventListener('drop', e => {
   e.preventDefault(); drop.style.background='';
   handleDrop(e.dataTransfer.items?.length ? e.dataTransfer.items : e.dataTransfer.files);
 });
-
 document.getElementById('pickdirBtn').onclick = ()=>document.getElementById('pickdir').click();
 document.getElementById('pickfilesBtn').onclick = ()=>document.getElementById('pickfiles').click();
-document.getElementById('pickdir').addEventListener('change', e => handleFiles(e.target.files));   // folder selection
-document.getElementById('pickfiles').addEventListener('change', e => handleFiles(e.target.files)); // file selection
+document.getElementById('pickdir').addEventListener('change', e => handleFiles(e.target.files));
+document.getElementById('pickfiles').addEventListener('change', e => handleFiles(e.target.files));
 
 async function handleDrop(itemsOrFiles){
   const files = [];
@@ -186,8 +189,7 @@ function readJSONwithPath(file){
       try {
         const json = JSON.parse(r.result);
         const item = {file, name:file.name, path:file.webkitRelativePath||file.name, json};
-        // Try to harvest SBOM rows (CycloneDX/SPDX) as we load
-        addSbomRows(item.path, json);
+        addSbomRows(item.path, json); // harvest SBOMs early
         res(item);
       } catch(e){ rej(e); }
     };
@@ -215,7 +217,7 @@ function countsFromJson(json){
         if (c[s] !== undefined) c[s] += 1;
       });
     }
-    // handle nested results (sometimes Trivy places vulns in res.Packages or SBOM entries)
+    // Some versions place vulns under packages
     if (res.Packages) {
       res.Packages.forEach(pkg=>{
         (pkg.Vulnerabilities||[]).forEach(v=>{
@@ -232,12 +234,18 @@ function sumCounts(list){
   list.forEach(c=>sevOrder.forEach(k=>s[k]+=c[k]||0));
   return s;
 }
-function imageName(json,fallback){
-  try{
-    const r = json.Results?.find(x=>x.Target) || json.Results?.[0];
-    if (r?.Target) return r.Target;
-  } catch(e){}
-  return fallback.replace(/\.json$/,'');
+function imageName(json, fallback){
+  // Prefer canonical name from JSON (if present)
+  if (json && typeof json === 'object') {
+    if (typeof json.ArtifactName === 'string' && json.ArtifactName) return json.ArtifactName;
+    const meta = json.Metadata || {};
+    if (Array.isArray(meta.Repotags) && meta.Repotags.length) return meta.Repotags[0];
+    if (Array.isArray(meta.RepoDigests) && meta.RepoDigests.length) return meta.RepoDigests[0];
+  }
+  // Fallback: nice basename from file path (strip any .json)
+  const base = String(fallback||'').split('/').pop().replace(/\.json$/,'');
+  // If it looks like a saved tar path, keep the tar name
+  return base;
 }
 function rowsFromJson(j, image){
   const out=[];
@@ -254,8 +262,32 @@ function rowsFromJson(j, image){
         URL: v.PrimaryURL || (v.References&&v.References[0]) || ''
       });
     });
+    (res.Packages||[]).forEach(pkg=>{
+      (pkg.Vulnerabilities||[]).forEach(v=>{
+        out.push({
+          Severity: (v.Severity||'UNKNOWN').toUpperCase(),
+          Image: image,
+          Pkg: pkg.Name || v.PkgName || '',
+          Installed: pkg.Version || v.InstalledVersion || '',
+          Fixed: v.FixedVersion || '',
+          CVE: v.VulnerabilityID || '',
+          Title: v.Title || v.Description || '',
+          URL: v.PrimaryURL || (v.References&&v.References[0]) || ''
+        });
+      });
+    });
   });
   return out;
+}
+function isVulnReport(obj){
+  if (!obj || typeof obj !== 'object') return false;
+  if (Array.isArray(obj.Results)) {
+    return obj.Results.some(r =>
+      (Array.isArray(r.Vulnerabilities) && r.Vulnerabilities.length) ||
+      (Array.isArray(r.Packages) && r.Packages.some(p => Array.isArray(p.Vulnerabilities) && p.Vulnerabilities.length))
+    );
+  }
+  return false;
 }
 
 /* ===== SBOM parsing ===== */
@@ -366,9 +398,8 @@ function drawStackedBarChart(canvas, labels, series){
   });
 }
 
-/* ===== build + render both sections ===== */
+/* ===== build + render (latest by default) ===== */
 function buildDataAndRender(){
-  // --- organize into weeks ---
   const map = new Map();
   for (const it of ALL_ITEMS) {
     const wk = extractWeekFromPath(it.path) || dateFromLastModified(it.file);
@@ -376,25 +407,43 @@ function buildDataAndRender(){
     map.get(wk).items.push({file:it.name, path:it.path, json:it.json});
   }
   WEEKS = [...map.values()].sort((a,b)=>a.date.localeCompare(b.date));
-  WEEKLY_AGG = WEEKS.map(w=>({date:w.date, counts: sumCounts(w.items.map(x=>countsFromJson(x.json)))}));
+
+  // Weekly aggregation considers only real vuln reports
+  WEEKLY_AGG = WEEKS.map(w=>{
+    const vulnItems = w.items.filter(x => isVulnReport(x.json));
+    return { date: w.date, counts: sumCounts(vulnItems.map(x => countsFromJson(x.json))) };
+  });
+
   LATEST = WEEKS[WEEKS.length-1];
+  const latestVulnItems = (LATEST?.items || []).filter(x => isVulnReport(x.json));
 
-  // --- latest week per-image ---
-  PER_IMAGE = (LATEST?.items||[]).map(it=>{
+  // Per-image table = latest only
+  PER_IMAGE = latestVulnItems.map(it=>{
     const c = countsFromJson(it.json);
-    return { image: imageName(it.json, it.file), ...c, total: sevOrder.reduce((s,k)=>s+(c[k]||0),0) };
-  }).sort((a,b)=>b.CRITICAL-a.CRITICAL || b.HIGH-a.HIGH);
+    return {
+      image: imageName(it.json, it.file),
+      ...c,
+      total: sevOrder.reduce((s,k)=>s+(c[k]||0),0)
+    };
+  }).sort((a,b)=>b.CRITICAL-a.CRITICAL || b.HIGH-a.HIGH || b.MEDIUM-a.MEDIUM || b.LOW-a.LOW);
 
-  // --- all vulnerabilities rows (for viewer) ---
+  // Viewer rows = latest by default (can be switched to all weeks)
+  const allWeeks = document.getElementById('allweeks')?.checked;
+  const srcItems = allWeeks
+    ? WEEKS.flatMap(w => w.items).filter(x => isVulnReport(x.json))
+    : latestVulnItems;
+
   VUL_ROWS = [];
-  for (const it of ALL_ITEMS) {
+  for (const it of srcItems) {
     const img = imageName(it.json, it.name);
     VUL_ROWS.push(...rowsFromJson(it.json, img));
   }
 
-  // render weekly dashboard
   renderWeekly();
-  // enable CSV buttons
+  wireViewerOnce(); renderViewer();
+  wireSbomOnce(); renderSbomTable();
+
+  // CSV buttons
   const weeklyBtn = document.getElementById('dl-weekly');
   const latestBtn  = document.getElementById('dl-latest');
   weeklyBtn.disabled = WEEKS.length===0;
@@ -404,23 +453,17 @@ function buildDataAndRender(){
                          total: sevOrder.reduce((s,k)=>s+(w.counts[k]||0),0)})));
   latestBtn.onclick = ()=>downloadCSV('latest_week_per_image.csv',
     PER_IMAGE.map(r=>({image:r.image, CRITICAL:r.CRITICAL,HIGH:r.HIGH,MEDIUM:r.MEDIUM,LOW:r.LOW,UNKNOWN:r.UNKNOWN,total:r.total})));
-
-  // render vulnerabilities viewer (filtered)
-  setupViewerOnce();
-  renderViewer();
-
-  // SBOM viewer
-  wireSbomOnce();
-  renderSbomTable();
 }
 
 function renderWeekly(){
+  // Trend
   const labels = WEEKLY_AGG.map(w=>w.date);
   const series = sevOrder.map(k=>({name:k, color:sevColor[k], values:WEEKLY_AGG.map(w=>w.counts[k]||0)}));
   drawLineChart(document.getElementById('trend'), labels, series);
   document.getElementById('trend-note').textContent =
     WEEKS.length ? `Weeks: ${labels[0]} → ${labels[labels.length-1]}  •  Folders: ${WEEKS.length}` : 'No data';
 
+  // Latest stacked bars
   const barLabels = PER_IMAGE.map(r=>r.image);
   const barSeries = [
     {name:'CRITICAL', color:sevColor.CRITICAL, values: PER_IMAGE.map(r=>r.CRITICAL)},
@@ -430,9 +473,12 @@ function renderWeekly(){
     {name:'UNKNOWN',  color:sevColor.UNKNOWN,  values: PER_IMAGE.map(r=>r.UNKNOWN)},
   ];
   drawStackedBarChart(document.getElementById('bars'), barLabels, barSeries);
+  const latestDate = LATEST ? LATEST.date : '—';
   document.getElementById('bars-note').textContent =
-    LATEST ? `Latest week: ${LATEST.date} • ${PER_IMAGE.length} images (stacked by severity)` : 'No latest week found';
-
+    LATEST ? `Latest week: ${latestDate} • ${PER_IMAGE.length} images` : 'No latest week found';
+  document.getElementById('latest-week-label').textContent =
+    LATEST ? `Folder date used here: ${latestDate}` : '';
+  // Latest table
   const tbody = document.getElementById('latest-tbody');
   tbody.innerHTML = PER_IMAGE.map(r=>`
     <tr>
@@ -448,13 +494,14 @@ function renderWeekly(){
 }
 
 /* ===== vulnerabilities viewer ===== */
-let viewerSetup = false, sortKey='Severity', sortDir='asc';
-function setupViewerOnce(){
-  if (viewerSetup) return;
-  viewerSetup = true;
+let viewerWired = false, sortKey='Severity', sortDir='asc';
+function wireViewerOnce(){
+  if (viewerWired) return; viewerWired = true;
   document.querySelectorAll('.sev').forEach(cb=>cb.onchange = renderViewer);
   document.getElementById('fixonly').onchange = renderViewer;
   document.getElementById('q').oninput = renderViewer;
+  const aw = document.getElementById('allweeks');
+  if (aw) aw.onchange = ()=>{ buildDataAndRender(); };
   document.querySelectorAll('#grid thead th').forEach(th=>{
     th.onclick = ()=>{ const k=th.dataset.k; if(!k) return; sortKey===k ? sortDir=(sortDir==='asc'?'desc':'asc') : (sortKey=k, sortDir='asc'); renderViewer(); };
   });
@@ -464,6 +511,11 @@ function renderViewer(){
   const sevOn = new Set([...document.querySelectorAll('.sev')].filter(cb=>cb.checked).map(cb=>cb.value));
   const fixOnly = document.getElementById('fixonly').checked;
   const q = (document.getElementById('q').value||'').trim().toLowerCase();
+  const aw = document.getElementById('allweeks')?.checked;
+
+  document.getElementById('scope-note').textContent =
+    aw ? 'Viewer scope: ALL loaded folders (aggregated).' :
+         'Viewer scope: Latest folder only (matches the table above).';
 
   CURRENT_ROWS = VUL_ROWS.filter(r=>{
     if (!sevOn.has(r.Severity)) return false;
@@ -485,7 +537,7 @@ function renderViewer(){
   CURRENT_ROWS.sort((a,b)=>{
     let va=a[sortKey]||'', vb=b[sortKey]||'';
     if (sortKey==='Severity') return (sevRank(va)-sevRank(vb))*dir;
-    return va.localeCompare(vb, undefined, {numeric:true})*dir;
+    return (''+va).localeCompare(''+vb, undefined, {numeric:true})*dir;
   });
 
   const tbody = document.querySelector('#grid tbody');
