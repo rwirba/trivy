@@ -47,6 +47,26 @@ EXTERNAL_TIMEOUT="${EXTERNAL_TIMEOUT:-}"
 GENERATE_SBOM="${GENERATE_SBOM:-true}"
 SBOM_FORMAT="${SBOM_FORMAT:-cyclonedx}"   # or "spdx-json"
 
+# --- Step 1: Extract offline DB if tarball exists ---
+DB_TARBALL=$(ls -1 trivy-offline.db-*.tgz 2>/dev/null | sort -r | head -n1 || true)
+if [[ -n "$DB_TARBALL" ]]; then
+  echo "[*] Found DB tarball: $DB_TARBALL"
+  mkdir -p "$CACHE_DIR/db"
+  echo "    Cleaning old DB files..."
+  rm -f "$CACHE_DIR/db/trivy.db" "$CACHE_DIR/db/metadata.json"
+  echo "    Extracting into $CACHE_DIR/db"
+  tar -xzf "$DB_TARBALL" -C "$CACHE_DIR"
+else
+  echo "[!] No trivy-offline.db-*.tgz found in $(pwd). Assuming DB already exists in $CACHE_DIR/db."
+fi
+
+# --- Step 2: Verify DB is present ---
+if [[ ! -f "$CACHE_DIR/db/trivy.db" || ! -f "$CACHE_DIR/db/metadata.json" ]]; then
+  echo "[ERROR] Trivy offline DB not found in $CACHE_DIR/db (need trivy.db and metadata.json)."
+  exit 1
+fi
+
+echo "[*] Using offline DB from $CACHE_DIR/db"
 # --- sanity checks ---
 command -v podman >/dev/null || { echo "podman not found"; exit 1; }
 command -v trivy  >/dev/null || { echo "trivy not found";  exit 1; }
