@@ -225,14 +225,25 @@ fi
 # ---------- package ----------
 BUNDLE_DIR="$(pwd)/offline_bundle"
 rm -rf "$BUNDLE_DIR"; mkdir -p "$BUNDLE_DIR/db"
-cp "$DB_FINAL"  "$BUNDLE_DIR/db/trivy.db"
+
+cp "$DB_FINAL"   "$BUNDLE_DIR/db/trivy.db"
 cp "$META_FINAL" "$BUNDLE_DIR/db/metadata.json"
 
+# Add java-db too if present
+if [[ -d "$JAVA_FINAL" ]]; then
+  cp -r "$JAVA_FINAL" "$BUNDLE_DIR/java-db"
+fi
+
 cd "$BUNDLE_DIR"
-tar -czf ../../trivy-offline.db.tgz db
+
+# Only YYYYmmdd in filename
+STAMP="$(date +%Y%m%d)"
+tar -czf "../../trivy-offline-db-${STAMP}.tgz" db java-db 2>/dev/null || \
+tar -czf "../../trivy-offline-db-${STAMP}.tgz" db
+
 cd - >/dev/null
 
-abs_tgz="$(cd ../.. && pwd)/trivy-offline.db.tgz"
+abs_tgz="$(cd ../.. && pwd)/trivy-offline-db-${STAMP}.tgz"
 msg "[*] Built offline DB archive: $abs_tgz"
 
 # Safe to clean original out now (optional)
