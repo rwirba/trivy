@@ -234,19 +234,24 @@ function sumCounts(list){
   list.forEach(c=>sevOrder.forEach(k=>s[k]+=c[k]||0));
   return s;
 }
+function _basename(p){ return String(p).split('/').pop(); }
+function _stripExt(n){ return n.replace(/\.(json|tar)$/i,''); }
+
 function imageName(json, fallback){
-  // Prefer canonical name from JSON (if present)
-  if (json && typeof json === 'object') {
-    if (typeof json.ArtifactName === 'string' && json.ArtifactName) return json.ArtifactName;
-    const meta = json.Metadata || {};
-    if (Array.isArray(meta.Repotags) && meta.Repotags.length) return meta.Repotags[0];
-    if (Array.isArray(meta.RepoDigests) && meta.RepoDigests.length) return meta.RepoDigests[0];
-  }
-  // Fallback: nice basename from file path (strip any .json)
-  const base = String(fallback||'').split('/').pop().replace(/\.json$/,'');
-  // If it looks like a saved tar path, keep the tar name
-  return base;
+  // 1) Prefer Trivy’s artifact name if it looks like a repo/tag
+  const art = json?.ArtifactName || '';
+  if (art && !/\.tar$/i.test(art) && !/\/trivy-archive-/i.test(art)) return art;
+
+  // 2) Try repo tag/digest from metadata
+  const meta = json?.Metadata || {};
+  if (Array.isArray(meta.Repotags) && meta.Repotags.length) return meta.Repotags[0];
+  if (Array.isArray(meta.RepoDigests) && meta.RepoDigests.length) return meta.RepoDigests[0];
+
+  // 3) Fallback: clean up the filename from the archive
+  const nameFromFile = _stripExt(_basename(fallback || art || ''));
+  return nameFromFile || 'unknown';
 }
+
 function rowsFromJson(j, image){
   const out=[];
   (j.Results||[]).forEach(res=>{
