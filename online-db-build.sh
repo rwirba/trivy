@@ -9,7 +9,11 @@ set -euo pipefail
 # Flags:  --os-only | --full | --install
 # Env:    WORKROOT=/big/disk   TMPDIR=/big/disk/tmp
 # =========================
-
+# --- clean any stale build workspace if present ---
+if [[ -d "_trivy-db-build" ]]; then
+  echo "[*] Removing old _trivy-db-build/ workspace..."
+  rm -rf _trivy-db-build/
+fi
 # --- normalize line endings if file was saved with CRLF (safe no-op otherwise)
 if file "$0" 2>/dev/null | grep -qi 'CRLF'; then
   sed -i 's/\r$//' "$0" 2>/dev/null || true
